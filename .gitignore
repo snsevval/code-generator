@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+
+# Sanal ortamlar
+.venv/
+venv/
+
+# uv
+uv.lock
+
+# Test / araç önbellekleri
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Ortam değişkenleri
+.env
+
+# Ajan çalışma alanı çıktıları (workspace içi üretilen dosyalar takip edilmez)
+workspace/*
+!workspace/.gitkeep
+
+# IDE / OS
+.vscode/
+.idea/
+Thumbs.db
+.DS_Store
