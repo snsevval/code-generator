@@ -85,8 +85,58 @@ def test_ajan_izinsiz_araci_alamaz(tmp_path):
     ork, istemci = orkestrator_kur(tmp_path, [metin_cevap("plan")])
     ork.ajan_calistir(AJANLAR["planner"], "planla")
 
-    gonderilen_araclar = [t["name"] for t in istemci.istekler[0]["tools"]]
-    assert gonderilen_araclar == ["read_file"]  # planner yalnızca okuyabilir
+    gonderilen_araclar = {t["name"] for t in istemci.istekler[0]["tools"]}
+    assert gonderilen_araclar == {"list_files", "read_file"}  # planner yalnızca okuyabilir
+
+
+def test_validator_mevcut_dosyayi_degistiremez(tmp_path):
+    senaryo = [
+        tool_cevap("write_file", {"path": "kod.py", "content": "yeniden yazdım"}),
+        metin_cevap("olmadı"),
+    ]
+    ork, istemci = orkestrator_kur(tmp_path, senaryo)
+    (ork.executor.workspace / "kod.py").write_text("orijinal", encoding="utf-8")
+
+    ork.ajan_calistir(AJANLAR["validator"], "doğrula")
+
+    # Dosya değişmemiş olmalı, model hatayla bilgilendirilmeli
+    assert (ork.executor.workspace / "kod.py").read_text(encoding="utf-8") == "orijinal"
+    sonuc = istemci.istekler[1]["messages"][-1]["content"][0]
+    assert sonuc["is_error"] is True
+    assert "değiştiremez" in sonuc["content"]
+
+
+def test_validator_yeni_dosya_yazabilir(tmp_path):
+    senaryo = [
+        tool_cevap("write_file", {"path": "test_yeni.py", "content": "assert True"}),
+        metin_cevap("test ekledim"),
+    ]
+    ork, istemci = orkestrator_kur(tmp_path, senaryo)
+    ork.ajan_calistir(AJANLAR["validator"], "doğrula")
+
+    assert (ork.executor.workspace / "test_yeni.py").is_file()
+    assert istemci.istekler[1]["messages"][-1]["content"][0]["is_error"] is False
+
+
+def test_eski_arac_ciktilari_kirpilir(tmp_path):
+    uzun = "X" * 5000
+    senaryo = [
+        tool_cevap("read_file", {"path": "a.txt"}, "tu_1"),
+        tool_cevap("read_file", {"path": "a.txt"}, "tu_2"),
+        metin_cevap("bitti"),
+    ]
+    ork, istemci = orkestrator_kur(tmp_path, senaryo)
+    (ork.executor.workspace / "a.txt").write_text(uzun, encoding="utf-8")
+
+    ork.ajan_calistir(AJANLAR["codegen"], "oku oku")
+
+    # 3. istekte: ilk tool_result kırpılmış, son (en güncel) tam olmalı
+    mesajlar = istemci.istekler[2]["messages"]
+    ilk_sonuc = mesajlar[2]["content"][0]["content"]
+    son_sonuc = mesajlar[4]["content"][0]["content"]
+    assert "kırpıldı" in ilk_sonuc
+    assert len(ilk_sonuc) < 1000
+    assert son_sonuc == uzun
 
 
 def test_ajan_sonsuz_tool_dongusunde_durdurulur(tmp_path):

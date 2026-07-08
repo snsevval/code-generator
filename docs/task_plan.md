@@ -67,12 +67,11 @@ Orkestratörün yönettiği çok-ajanlı üretim döngüsü.
 
 ### Faz 2 iyileştirme listesi (2026-07-08 canlı koşu bulguları)
 
-- [ ] **Rol sınırlarını kodda zorla:** Validator, sistem promptundaki yasağa rağmen mevcut
-      dosyaları yeniden yazıyor (özellikle Llama). Prompt yerine orkestratör düzeyinde
-      mekanik kısıt gerek: validator'ın write_file'ı yalnızca var olmayan dosyalara izinli.
-- [ ] **Token verimliliği:** ajan geçmişinde biriken tool_result'lar günlük kotayı hızla
-      tüketiyor (Groq 100k TPD iki koşuda bitti). Uzun araç çıktılarında kırpma ve/veya
-      geçmiş özetleme ekle.
+- [x] **Rol sınırlarını kodda zorla:** validator'ın write_file'ı yalnızca var olmayan
+      dosyalara izinli (`AjanTanimi.mevcut_dosyayi_degistiremez`, orkestratörde mekanik
+      kontrol; ihlalde modele is_error'lı açıklama döner)
+- [x] **Token verimliliği:** son tur hariç geçmişteki tool_result içerikleri 400 karaktere
+      kırpılıyor (`_gecmisi_kirp`); en güncel araç çıktısı tam kalır
 - [ ] Model kalite notu: Llama 3.3 70B kod kalitesi zayıf (unicode-kaçışlı Türkçe metin,
       yazım hatası, exec tabanlı kırılgan test). Codegen/Debugger için Gemini tercih;
       Llama ancak Planner/Reviewer gibi hafif roller için düşünülmeli.
@@ -94,7 +93,8 @@ Tek döngü birkaç dosyalık görevleri götürüyor; "e-ticaret sitesi" ölçe
 görevler arası bağlam taşıma. Önkoşullar: Faz 2 iyileştirme listesi (token verimliliği,
 rol kısıtları) ve yeterli kota.
 
-- [ ] `list_files` aracı (Tool Executor'a; ajan workspace içeriğini görebilmeli)
+- [x] `list_files` aracı (Tool Executor'a eklendi; tüm ajanlarda izinli, üretilen
+      klasörleri — .git, node_modules, __pycache__ vb. — gizler)
 - [ ] Üst-Planner (Decomposer) ajanı: hedef → JSON alt görev listesi
       (görev tanımı, bağımlılıklar, kabul ölçütü; kod yazmaz)
 - [ ] Proje state'i (`.state/proje.json`): alt görev durumları, kesintiden devam

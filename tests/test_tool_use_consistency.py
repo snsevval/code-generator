@@ -212,6 +212,14 @@ def test_tool_use_tutarliligi():
 
     if not _proxy_ayakta():
         pytest.skip("proxy (fcc-server) çalışmıyor — entegrasyon testi atlandı")
+    if "ANTHROPIC_AUTH_TOKEN" not in os.environ:
+        # Token verilmeden koşulursa proxy 401 döner; kota da harcanmaz — atla
+        with httpx.Client(timeout=30.0) as istemci:
+            if "401" in (tek_istek(istemci).detay or ""):
+                pytest.skip(
+                    "proxy giriş anahtarı eşleşmedi — ANTHROPIC_AUTH_TOKEN ortam "
+                    "değişkenini proxy'dekiyle aynı değere ayarlayıp yeniden koşun"
+                )
     sonuclar = denemeleri_calistir()
     basarili = rapor_bas(sonuclar)
     assert basarili == len(sonuclar), (

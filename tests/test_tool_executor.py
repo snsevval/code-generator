@@ -67,6 +67,47 @@ def test_klasore_yazma_reddi(executor):
     assert not sonuc.ok
 
 
+# --- list_files ---
+
+
+def test_list_files_alt_klasorlerle(executor):
+    executor.write_file("a.txt", "x")
+    executor.write_file("alt/b.py", "yy")
+    sonuc = executor.list_files()
+    assert sonuc.ok
+    assert "a.txt (1 B)" in sonuc.cikti
+    assert "alt/b.py (2 B)" in sonuc.cikti
+
+
+def test_list_files_gizli_klasorleri_atlar(executor, tmp_path):
+    executor.write_file("gercek.txt", "x")
+    (tmp_path / "__pycache__").mkdir()
+    (tmp_path / "__pycache__" / "izsiz.pyc").write_text("z")
+    (tmp_path / ".git").mkdir()
+    (tmp_path / ".git" / "config").write_text("z")
+    sonuc = executor.list_files()
+    assert "gercek.txt" in sonuc.cikti
+    assert "izsiz" not in sonuc.cikti
+    assert ".git" not in sonuc.cikti
+
+
+def test_list_files_bos_klasor(executor):
+    assert executor.list_files().cikti == "(klasör boş)"
+
+
+def test_list_files_disari_cikamaz(executor):
+    sonuc = executor.list_files("..")
+    assert not sonuc.ok
+    assert "HATA" in sonuc.cikti
+
+
+def test_dosya_var_mi(executor):
+    assert not executor.dosya_var_mi("yok.txt")
+    executor.write_file("var.txt", "x")
+    assert executor.dosya_var_mi("var.txt")
+    assert not executor.dosya_var_mi("../disarida.txt")  # kaçış → False
+
+
 # --- Path doğrulama ---
 
 

@@ -15,6 +15,7 @@ böylece hata metni ``tool_result`` içinde modele geri beslenebilir.
 from __future__ import annotations
 
 import difflib
+import os
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
@@ -22,7 +23,20 @@ from pathlib import Path
 # Sınırlar
 MAX_OKUMA_BOYUTU = 256 * 1024  # bayt; daha büyük dosyalar kesilerek okunur
 MAX_CIKTI_UZUNLUGU = 32_000  # karakter; shell çıktısı bundan uzunsa kesilir
+MAX_LISTE_DOSYASI = 500  # list_files en çok bu kadar dosya gösterir
 VARSAYILAN_ZAMAN_ASIMI_SN = 30.0
+
+# list_files'ın atladığı klasörler (üretilen/araç çıktısı içerikler)
+GIZLENEN_KLASORLER = {
+    ".git",
+    "__pycache__",
+    ".venv",
+    "venv",
+    "node_modules",
+    ".pytest_cache",
+    ".state",
+    ".next",
+}
 
 # Anthropic Messages API biçiminde araç tanımları (ajan isteklerine eklenecek)
 TOOL_TANIMLARI = [
@@ -59,6 +73,23 @@ TOOL_TANIMLARI = [
                 },
             },
             "required": ["path", "content"],
+        },
+    },
+    {
+        "name": "list_files",
+        "description": (
+            "Workspace'teki dosyaları (alt klasörler dahil) boyutlarıyla listeler. "
+            "Hangi dosyaların var olduğunu görmek için önce bunu kullan."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "path": {
+                    "type": "string",
+                    "description": "Listelenecek klasör (boşsa workspace kökü)",
+                }
+            },
+            "required": [],
         },
     },
     {
@@ -179,6 +210,35 @@ class ToolExecutor:
 
     # --- Araçlar ---
 
+    def dosya_var_mi(self, path: str) -> bool:
+        """Yol workspace içinde var olan bir dosyaya mı işaret ediyor?"""
+        try:
+            return self._coz(path).is_file()
+        except ValueError:
+            return False
+
+    def list_files(self, path: str = ".") -> ToolSonucu:
+        try:
+            tam = self._coz(path or ".")
+        except ValueError as e:
+            return ToolSonucu(False, f"HATA: {e}")
+        if not tam.is_dir():
+            return ToolSonucu(False, f"HATA: klasör bulunamadı: {path!r}")
+
+        satirlar: list[str] = []
+        for kok, klasorler, dosyalar in os.walk(tam):
+            klasorler[:] = sorted(k for k in klasorler if k not in GIZLENEN_KLASORLER)
+            for ad in sorted(dosyalar):
+                p = Path(kok) / ad
+                gorel = p.relative_to(self.workspace).as_posix()
+                satirlar.append(f"{gorel} ({p.stat().st_size} B)")
+                if len(satirlar) >= MAX_LISTE_DOSYASI:
+                    satirlar.append(f"... [{MAX_LISTE_DOSYASI} dosya sınırına ulaşıldı]")
+                    return ToolSonucu(True, "\n".join(satirlar))
+        if not satirlar:
+            return ToolSonucu(True, "(klasör boş)")
+        return ToolSonucu(True, "\n".join(satirlar))
+
     def read_file(self, path: str) -> ToolSonucu:
         try:
             tam = self._coz(path)
@@ -245,6 +305,8 @@ class ToolExecutor:
 
     def calistir(self, ad: str, girdi: dict) -> ToolSonucu:
         """Araç adını ve girdisini alıp ilgili aracı çağırır (ajan döngüsü girişi)."""
+        if ad == "list_files":
+            return self.list_files(girdi.get("path") or ".")
         if ad == "read_file":
             return self.read_file(girdi.get("path", ""))
         if ad == "write_file":

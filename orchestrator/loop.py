@@ -21,10 +21,12 @@ from orchestrator.agents import (
 )
 from orchestrator.llm_client import LLMIstemcisi
 from orchestrator.state import OturumState
-from orchestrator.tool_executor import TOOL_TANIMLARI, ToolExecutor
+from orchestrator.tool_executor import TOOL_TANIMLARI, ToolExecutor, ToolSonucu
 
 MAX_TOOL_TURU = 25  # bir ajanın tek görevde yapabileceği en fazla tool turu
 MAX_DEBUG_TURU = 3  # doğrulama başarısız kaldıkça en fazla kaç debugger turu
+# Token tasarrufu: en son tur hariç, geçmişteki araç çıktıları bu uzunluğa kırpılır
+ESKI_ARAC_CIKTISI_KIRPMA = 400
 
 
 class OrkestrasyonHatasi(RuntimeError):
@@ -36,6 +38,28 @@ def _metin(yanit: dict) -> str:
     return "\n".join(
         b.get("text", "") for b in yanit.get("content", []) if b.get("type") == "text"
     ).strip()
+
+
+def _gecmisi_kirp(mesajlar: list[dict]) -> None:
+    """Son mesaj hariç geçmişteki tool_result içeriklerini kısaltır.
+
+    Model uzun araç çıktısına (dosya içeriği, test dökümü) yalnızca hemen
+    sonraki turda ihtiyaç duyar; eski turlarda tam metni taşımak günlük token
+    kotasını hızla tüketiyor. Kırpma kalıcıdır (mesaj listesi yerinde değişir).
+    """
+    for mesaj in mesajlar[:-1]:
+        if mesaj.get("role") != "user" or not isinstance(mesaj.get("content"), list):
+            continue
+        for blok in mesaj["content"]:
+            icerik = blok.get("content")
+            if (
+                blok.get("type") == "tool_result"
+                and isinstance(icerik, str)
+                and len(icerik) > ESKI_ARAC_CIKTISI_KIRPMA
+            ):
+                blok["content"] = (
+                    icerik[:ESKI_ARAC_CIKTISI_KIRPMA] + "\n... [eski araç çıktısı kırpıldı]"
+                )
 
 
 class Orkestrator:
@@ -67,6 +91,7 @@ class Orkestrator:
         mesajlar: list[dict] = [{"role": "user", "content": gorev_metni}]
 
         for _ in range(MAX_TOOL_TURU):
+            _gecmisi_kirp(mesajlar)
             yanit = self.istemci.mesaj_gonder(
                 model=ajan.model,
                 system=ajan.sistem_prompt,
@@ -85,7 +110,22 @@ class Orkestrator:
             sonuc_bloklari = []
             for blok in tool_bloklari:
                 self._yaz(f"    [{ajan.ad}] araç: {blok['name']}({blok.get('input', {})})")
-                sonuc = self.executor.calistir(blok["name"], blok.get("input") or {})
+                girdi = blok.get("input") or {}
+                # Rol kısıtı: bazı ajanlar (validator) mevcut dosyayı değiştiremez —
+                # promptla değil mekanik olarak engellenir
+                if (
+                    blok["name"] == "write_file"
+                    and ajan.mevcut_dosyayi_degistiremez
+                    and self.executor.dosya_var_mi(girdi.get("path", ""))
+                ):
+                    sonuc = ToolSonucu(
+                        False,
+                        f"HATA: {ajan.ad} rolü var olan dosyayı değiştiremez "
+                        f"({girdi.get('path')!r}). Düzeltme Debugger'ın işi; sen yalnızca "
+                        "doğrula ve sonucu raporla.",
+                    )
+                else:
+                    sonuc = self.executor.calistir(blok["name"], girdi)
                 sonuc_bloklari.append(
                     {
                         "type": "tool_result",
