@@ -1,0 +1,137 @@
+"""Faz 4 — Proje orkestratörü: büyük hedefleri alt görev zincirine böler.
+
+Akış:
+  1. Decomposer ajanı hedefi JSON alt görev listesine çevirir
+  2. Her alt görev, mevcut tek-görev döngüsüyle (Planner→...→Reviewer) koşulur
+  3. Biten alt görevin özeti + güncel dosya listesi sonraki görevin bağlamına eklenir
+  4. Bir alt görev doğrulamadan geçemezse zincir durur (sonrakiler ona bağımlı)
+
+Proje durumu `.state/proje.json`'a yazılır; `devam=True` ile başarılı alt
+görevler atlanarak kalınan yerden sürülür.
+"""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+from orchestrator.agents import AJANLAR
+from orchestrator.loop import Orkestrator, OrkestrasyonHatasi
+from orchestrator.state import ProjeState
+
+OZET_SINIRI = 500  # alt görev özetinin sonraki bağlama taşınan azami uzunluğu
+
+
+def _json_dizisi_ayikla(metin: str) -> list[dict]:
+    """Model cevabındaki JSON dizisini ayıklar (``` çitleri ve önsöz toleranslı)."""
+    bas, son = metin.find("["), metin.rfind("]")
+    if bas == -1 or son <= bas:
+        raise OrkestrasyonHatasi(
+            "decomposer çıktısında JSON dizisi bulunamadı:\n" + metin[:300]
+        )
+    try:
+        veri = json.loads(metin[bas : son + 1])
+    except json.JSONDecodeError as e:
+        raise OrkestrasyonHatasi(f"decomposer JSON'ı çözülemedi: {e}") from e
+    if not isinstance(veri, list) or not veri:
+        raise OrkestrasyonHatasi("decomposer boş/geçersiz alt görev listesi döndürdü")
+    for oge in veri:
+        if not isinstance(oge, dict) or not str(oge.get("gorev", "")).strip():
+            raise OrkestrasyonHatasi(f"geçersiz alt görev öğesi: {oge!r}")
+    return veri
+
+
+class ProjeOrkestratoru:
+    def __init__(
+        self,
+        workspace: Path | str,
+        orkestrator: Orkestrator | None = None,
+        state_klasoru: Path | str = ".state",
+        log: bool | object = True,
+    ):
+        self.state_klasoru = Path(state_klasoru)
+        self.ork = orkestrator or Orkestrator(workspace, log=log)
+        self._log = log
+
+    def _yaz(self, mesaj: str) -> None:
+        if callable(self._log):
+            self._log(mesaj)
+        elif self._log:
+            print(mesaj, flush=True)
+
+    @property
+    def proje_state_yolu(self) -> Path:
+        return self.state_klasoru / "proje.json"
+
+    # --- Aşama 1: hedefi böl ---
+
+    def hedefi_bol(self, hedef: str) -> ProjeState:
+        self._yaz("[decomposer] hedef alt görevlere bölünüyor...")
+        cikti = self.ork.ajan_calistir(
+            AJANLAR["decomposer"], f"Hedef: {hedef}\n\nBu hedefi alt görevlere böl."
+        )
+        alt_gorevler = [
+            {
+                "id": int(oge.get("id", i + 1)),
+                "gorev": str(oge["gorev"]).strip(),
+                "kabul": str(oge.get("kabul", "")).strip(),
+                "durum": "bekliyor",
+                "ozet": "",
+            }
+            for i, oge in enumerate(_json_dizisi_ayikla(cikti))
+        ]
+        self._yaz(f"[decomposer] {len(alt_gorevler)} alt görev çıkarıldı.")
+        return ProjeState(hedef=hedef, alt_gorevler=alt_gorevler)
+
+    # --- Aşama 2: zinciri koş ---
+
+    def _alt_gorev_metni(self, state: ProjeState, alt: dict) -> str:
+        onceki = "\n".join(
+            f"- [{o['id']}] {o['gorev']}: {o['ozet'] or o['durum']}"
+            for o in state.alt_gorevler
+            if o["durum"] == "basarili"
+        )
+        dosyalar = self.ork.executor.list_files().cikti
+        parcalar = [
+            f"Proje hedefi: {state.hedef}",
+            f"Bu alt görev: {alt['gorev']}",
+        ]
+        if alt["kabul"]:
+            parcalar.append(f"Kabul ölçütü: {alt['kabul']}")
+        if onceki:
+            parcalar.append(f"Tamamlanan önceki alt görevler:\n{onceki}")
+        parcalar.append(f"Workspace'teki mevcut dosyalar:\n{dosyalar}")
+        return "\n\n".join(parcalar)
+
+    def hedef_calistir(self, hedef: str, devam: bool = False) -> ProjeState:
+        state = ProjeState.yukle(self.proje_state_yolu) if devam else None
+        if state is None or state.hedef != hedef:
+            state = self.hedefi_bol(hedef)
+            state.kaydet(self.proje_state_yolu)
+
+        for alt in state.alt_gorevler:
+            if alt["durum"] == "basarili":
+                self._yaz(f"[proje] alt görev {alt['id']} atlandı (tamamlanmış)")
+                continue
+
+            self._yaz(f"[proje] alt görev {alt['id']}/{len(state.alt_gorevler)}: {alt['gorev']}")
+            # Her alt görevin kendi iç-döngü state'i olur (kesintide iç devam için)
+            self.ork.state_yolu = self.state_klasoru / f"alt_{alt['id']}.json"
+            oturum = self.ork.gorev_calistir(
+                self._alt_gorev_metni(state, alt), devam=devam
+            )
+
+            gecti = oturum.ciktilar.get("dogrulama_gecti") == "True"
+            alt["durum"] = "basarili" if gecti else "basarisiz"
+            # Codegen'in kendi özeti sonraki görevlerin bağlamına taşınır
+            alt["ozet"] = oturum.ciktilar.get("codegen", "")[:OZET_SINIRI]
+            state.kaydet(self.proje_state_yolu)
+
+            if not gecti:
+                self._yaz(
+                    f"[proje] alt görev {alt['id']} doğrulamadan geçemedi — zincir durdu "
+                    "(sonraki görevler buna bağımlı olabilir)."
+                )
+                break
+
+        return state

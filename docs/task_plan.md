@@ -95,9 +95,12 @@ rol kısıtları) ve yeterli kota.
 
 - [x] `list_files` aracı (Tool Executor'a eklendi; tüm ajanlarda izinli, üretilen
       klasörleri — .git, node_modules, __pycache__ vb. — gizler)
-- [ ] Üst-Planner (Decomposer) ajanı: hedef → JSON alt görev listesi
-      (görev tanımı, bağımlılıklar, kabul ölçütü; kod yazmaz)
-- [ ] Proje state'i (`.state/proje.json`): alt görev durumları, kesintiden devam
-- [ ] Bağlam taşıma: biten alt görevin özeti + dosya listesi → sonraki alt görevin girdisi
+- [x] Üst-Planner (Decomposer) ajanı: hedef → JSON alt görev listesi
+      (`orchestrator/proje.py`; çit/önsöz toleranslı JSON ayıklama)
+- [x] Proje state'i (`.state/proje.json`): alt görev durumları, `--devam` ile başarılılar
+      atlanır; başarısız alt görev zinciri durdurur
+- [x] Bağlam taşıma: biten alt görevin codegen özeti (500 karakter) + güncel dosya
+      listesi sonraki alt görevin girdisine eklenir
+- [x] CLI: `uv run python -m orchestrator --proje "büyük hedef"`
 - [ ] Entegrasyon doğrulaması: tüm alt görevler bitince final Validator turu
 - [ ] UI: alt görev listesi görünümü + opsiyonel insan onay noktası (devam/düzelt)

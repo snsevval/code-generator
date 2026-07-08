@@ -12,6 +12,34 @@ from pathlib import Path
 
 
 @dataclass
+class ProjeState:
+    """Büyük hedefin alt görev zinciri (Faz 4).
+
+    alt_gorevler öğeleri: {"id": int, "gorev": str, "kabul": str,
+    "durum": "bekliyor" | "basarili" | "basarisiz", "ozet": str}
+    """
+
+    hedef: str
+    alt_gorevler: list[dict] = field(default_factory=list)
+
+    def kaydet(self, yol: Path) -> None:
+        yol.parent.mkdir(parents=True, exist_ok=True)
+        yol.write_text(
+            json.dumps(self.__dict__, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
+
+    @classmethod
+    def yukle(cls, yol: Path) -> "ProjeState | None":
+        if not yol.is_file():
+            return None
+        try:
+            veri = json.loads(yol.read_text(encoding="utf-8"))
+            return cls(**veri)
+        except (json.JSONDecodeError, TypeError):
+            return None
+
+
+@dataclass
 class OturumState:
     gorev: str
     tamamlanan: list[str] = field(default_factory=list)  # biten aşama adları, sırayla

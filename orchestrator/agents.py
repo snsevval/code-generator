@@ -81,6 +81,16 @@ AJANLAR: dict[str, AjanTanimi] = {
         "düzelt.",
         araclar=("list_files", "read_file", "write_file", "run_shell"),
     ),
+    "decomposer": AjanTanimi(
+        ad="decomposer",
+        sistem_prompt=_ORTAK
+        + " Rolün: DECOMPOSER (üst-planner). Verilen büyük hedefi, her biri tek "
+        "oturumda bitecek boyutta (en çok ~5 dosyalık) 2-8 SIRALI alt göreve böl. "
+        "Mevcut dosyaları görmek için list_files/read_file kullanabilirsin. Kod yazma. "
+        "Cevabın YALNIZCA şu biçimde bir JSON dizisi olsun, başka hiçbir metin ekleme: "
+        '[{"id": 1, "gorev": "...", "kabul": "kabul ölçütü ..."}, ...]',
+        araclar=("list_files", "read_file"),
+    ),
     "reviewer": AjanTanimi(
         ad="reviewer",
         sistem_prompt=_ORTAK

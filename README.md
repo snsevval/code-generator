@@ -49,6 +49,8 @@ uv run python -m orchestrator "fibonacci hesaplayan küçük bir CLI aracı yaz"
 #   --workspace <klasör>  çalışma alanı (varsayılan: workspace)
 #   --docker              run_shell komutlarını ağa kapalı Docker sandbox'ta koşar
 #   --devam               kesilen görevi .state/oturum.json'dan sürdürür
+#   --proje               büyük hedef modu: Decomposer hedefi alt görevlere böler,
+#                         her biri tam döngüyle sırayla koşulur (Faz 4)
 ```
 
 Akış: Planner → Codegen → Test/Validator → (başarısızsa Debugger, en çok 3 tur) → Reviewer.
