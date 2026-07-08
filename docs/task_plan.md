@@ -86,3 +86,18 @@ Orkestratörün yönettiği çok-ajanlı üretim döngüsü.
 - [ ] ui-ux-pro-max design tool entegrasyonu
 - [ ] Embedding tabanlı repo indexleme (bağlam seçimi için)
 - [ ] UI üzerinden uçtan uca gerçek görev (kota sıfırlanınca; CLI'daki temiz tam turla birlikte)
+
+## Faz 4 — Görev Ayrıştırma: Büyük Hedef Desteği
+
+Tek döngü birkaç dosyalık görevleri götürüyor; "e-ticaret sitesi" ölçeğindeki hedefler için
+üst katman: hedefi alt görev zincirine bölen Decomposer + proje düzeyinde state + alt
+görevler arası bağlam taşıma. Önkoşullar: Faz 2 iyileştirme listesi (token verimliliği,
+rol kısıtları) ve yeterli kota.
+
+- [ ] `list_files` aracı (Tool Executor'a; ajan workspace içeriğini görebilmeli)
+- [ ] Üst-Planner (Decomposer) ajanı: hedef → JSON alt görev listesi
+      (görev tanımı, bağımlılıklar, kabul ölçütü; kod yazmaz)
+- [ ] Proje state'i (`.state/proje.json`): alt görev durumları, kesintiden devam
+- [ ] Bağlam taşıma: biten alt görevin özeti + dosya listesi → sonraki alt görevin girdisi
+- [ ] Entegrasyon doğrulaması: tüm alt görevler bitince final Validator turu
+- [ ] UI: alt görev listesi görünümü + opsiyonel insan onay noktası (devam/düzelt)
