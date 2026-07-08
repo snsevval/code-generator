@@ -1,0 +1,105 @@
+"""Faz 3 — UI backend API testleri (sahte orkestratörle, ağsız).
+
+Çalıştırma:
+    uv run pytest tests/test_api.py -v
+"""
+
+from __future__ import annotations
+
+import time
+
+import pytest
+from fastapi.testclient import TestClient
+
+from orchestrator import api
+from orchestrator.state import OturumState
+
+
+class SahteOrkestrator:
+    """Gerçek LLM'e gitmeden log üretip sonuç döndüren sahte orkestratör."""
+
+    def __init__(self, log, beklet: float = 0.0, patla: bool = False):
+        self._log = log
+        self._beklet = beklet
+        self._patla = patla
+
+    def gorev_calistir(self, gorev: str, devam: bool = False) -> OturumState:
+        self._log("[planner] başlıyor...")
+        if self._beklet:
+            time.sleep(self._beklet)
+        if self._patla:
+            raise RuntimeError("sahte çökme")
+        self._log("[reviewer] bitti.")
+        state = OturumState(gorev=gorev)
+        state.ciktilar = {"dogrulama_gecti": "True", "reviewer": "rapor", "planner": "plan"}
+        return state
+
+
+@pytest.fixture
+def istemci(monkeypatch, tmp_path):
+    monkeypatch.setenv("FCC_WORKSPACE", str(tmp_path / "ws"))
+    # Her test temiz durumla başlasın
+    api.DURUM.__init__()
+    return TestClient(api.app)
+
+
+def _bekle_bitsin(istemci, sn: float = 5.0) -> dict:
+    """Arka plan görevi bitene dek durumu yoklar."""
+    son = time.monotonic() + sn
+    while time.monotonic() < son:
+        veri = istemci.get("/api/durum").json()
+        if not veri["calisiyor"]:
+            return veri
+        time.sleep(0.05)
+    raise AssertionError("görev zamanında bitmedi")
+
+
+def test_gorev_baslat_ve_sonuc(istemci, monkeypatch):
+    monkeypatch.setattr(
+        api, "ORKESTRATOR_FABRIKASI", lambda ws, ex, log: SahteOrkestrator(log)
+    )
+    yanit = istemci.post("/api/gorev", json={"gorev": "bir şey yap"})
+    assert yanit.status_code == 200
+
+    veri = _bekle_bitsin(istemci)
+    assert veri["hata"] is None
+    assert veri["sonuc"]["dogrulama_gecti"] is True
+    assert veri["sonuc"]["reviewer"] == "rapor"
+    assert "[planner] başlıyor..." in veri["log"]
+
+
+def test_ayni_anda_tek_gorev(istemci, monkeypatch):
+    monkeypatch.setattr(
+        api, "ORKESTRATOR_FABRIKASI", lambda ws, ex, log: SahteOrkestrator(log, beklet=0.5)
+    )
+    assert istemci.post("/api/gorev", json={"gorev": "birinci"}).status_code == 200
+    ikinci = istemci.post("/api/gorev", json={"gorev": "ikinci"})
+    assert ikinci.status_code == 409
+    _bekle_bitsin(istemci)
+
+
+def test_bos_gorev_reddedilir(istemci):
+    assert istemci.post("/api/gorev", json={"gorev": "   "}).status_code == 422
+
+
+def test_cokme_hata_olarak_doner(istemci, monkeypatch):
+    monkeypatch.setattr(
+        api, "ORKESTRATOR_FABRIKASI", lambda ws, ex, log: SahteOrkestrator(log, patla=True)
+    )
+    istemci.post("/api/gorev", json={"gorev": "patla"})
+    veri = _bekle_bitsin(istemci)
+    assert veri["hata"] is not None
+    assert "sahte çökme" in veri["hata"]
+    assert veri["sonuc"] is None
+    # Çökme sonrası yeni görev başlatılabilmeli
+    monkeypatch.setattr(
+        api, "ORKESTRATOR_FABRIKASI", lambda ws, ex, log: SahteOrkestrator(log)
+    )
+    assert istemci.post("/api/gorev", json={"gorev": "tekrar"}).status_code == 200
+    _bekle_bitsin(istemci)
+
+
+def test_saglik_endpointi(istemci):
+    veri = istemci.get("/api/saglik").json()
+    assert veri["api"] is True
+    assert isinstance(veri["proxy"], bool)

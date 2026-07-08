@@ -45,7 +45,7 @@ class Orkestrator:
         istemci: LLMIstemcisi | None = None,
         executor: ToolExecutor | None = None,
         state_yolu: Path | str = ".state/oturum.json",
-        log: bool = True,
+        log: bool | object = True,
     ):
         self.executor = executor or ToolExecutor(workspace)
         self.istemci = istemci or LLMIstemcisi()
@@ -53,7 +53,10 @@ class Orkestrator:
         self._log = log
 
     def _yaz(self, mesaj: str) -> None:
-        if self._log:
+        # log: False → sessiz, True → stdout, çağrılabilir → callback (UI akışı için)
+        if callable(self._log):
+            self._log(mesaj)
+        elif self._log:
             print(mesaj, flush=True)
 
     # --- Tek ajanın tool döngüsü ---

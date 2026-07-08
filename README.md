@@ -55,6 +55,21 @@ Akış: Planner → Codegen → Test/Validator → (başarısızsa Debugger, en 
 Model seçimi: `FCC_MODEL` tüm ajanları, `FCC_MODEL_PLANNER` gibi değişkenler tek ajanı
 değiştirir (varsayılan: `gemini/gemini-2.5-flash`).
 
+## Faz 3 — Web arayüzü
+
+İki sunucu gerekir (proxy'ye ek olarak):
+
+```powershell
+# 1) Backend API (proje kökünde)
+uv run uvicorn orchestrator.api:app --port 8090
+
+# 2) Next.js arayüzü
+cd ui
+npm run dev
+```
+
+Sonra http://localhost:3000 — görev yaz, modeli seç, ajanların ilerleyişini canlı izle.
+
 ## Proje yapısı
 
 | Klasör          | İçerik                                              |

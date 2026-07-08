@@ -1,0 +1,216 @@
+/* Faz 3 — orkestratör arayüzü stilleri (koyu tema, tek sayfa) */
+
+.ana {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 2rem 1.25rem 4rem;
+  font-family: ui-sans-serif, system-ui, sans-serif;
+}
+
+.baslik {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 1.5rem;
+}
+
+.baslik h1 {
+  font-size: 1.35rem;
+  font-weight: 650;
+}
+
+.rozet {
+  display: inline-block;
+  margin-left: 0.5rem;
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.rozetIyi {
+  background: #113b2a;
+  color: #4ade80;
+}
+
+.rozetKotu {
+  background: #3f1420;
+  color: #f87171;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-bottom: 2rem;
+}
+
+.form textarea {
+  width: 100%;
+  padding: 0.75rem;
+  border-radius: 10px;
+  border: 1px solid #333;
+  background: #161616;
+  color: inherit;
+  font: inherit;
+  resize: vertical;
+}
+
+.formAlt {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.formAlt select {
+  padding: 0.5rem 0.75rem;
+  border-radius: 8px;
+  border: 1px solid #333;
+  background: #161616;
+  color: inherit;
+  font: inherit;
+}
+
+.onayKutusu {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.formAlt button {
+  margin-left: auto;
+  padding: 0.55rem 1.4rem;
+  border-radius: 8px;
+  border: none;
+  background: #2563eb;
+  color: #fff;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.formAlt button:hover:not(:disabled) {
+  background: #1d4ed8;
+}
+
+.formAlt button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.panel h2 {
+  font-size: 1rem;
+  font-weight: 600;
+  margin-bottom: 0.75rem;
+  color: #d4d4d8;
+}
+
+.log {
+  background: #0d0d0d;
+  border: 1px solid #262626;
+  border-radius: 10px;
+  padding: 1rem;
+  max-height: 420px;
+  overflow-y: auto;
+  font-family: ui-monospace, monospace;
+  font-size: 0.8rem;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* Ajan renkleri */
+.planner {
+  color: #93c5fd;
+}
+.codegen {
+  color: #86efac;
+}
+.validator {
+  color: #fde047;
+}
+.debuggerAjan {
+  color: #fda4af;
+}
+.reviewer {
+  color: #c4b5fd;
+}
+.orkestrator {
+  color: #fdba74;
+  font-weight: 600;
+}
+
+.imlec {
+  animation: yanip-son 1s step-end infinite;
+  color: #737373;
+}
+
+@keyframes yanip-son {
+  50% {
+    opacity: 0;
+  }
+}
+
+.hata {
+  margin-top: 0.75rem;
+  padding: 0.6rem 0.9rem;
+  border-radius: 8px;
+  background: #3f1420;
+  color: #fca5a5;
+  font-size: 0.85rem;
+}
+
+.sonuc {
+  margin-top: 1rem;
+  padding: 1rem;
+  border: 1px solid #262626;
+  border-radius: 10px;
+  background: #131313;
+}
+
+.gecti {
+  color: #4ade80;
+}
+
+.kaldi {
+  color: #f87171;
+}
+
+.sonuc details {
+  margin-top: 0.75rem;
+}
+
+.sonuc summary {
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: #a1a1aa;
+}
+
+.sonuc pre {
+  margin-top: 0.5rem;
+  padding: 0.75rem;
+  background: #0d0d0d;
+  border-radius: 8px;
+  overflow-x: auto;
+  font-size: 0.8rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.bilgi {
+  color: #a1a1aa;
+  font-size: 0.9rem;
+}
+
+.bilgi code {
+  background: #161616;
+  padding: 0.15rem 0.4rem;
+  border-radius: 6px;
+  font-size: 0.85em;
+}

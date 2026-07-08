@@ -79,7 +79,10 @@ Orkestratörün yönettiği çok-ajanlı üretim döngüsü.
 
 ## Faz 3 — UI ve İndeksleme
 
-- [ ] Next.js UI
+- [x] UI ↔ orkestratör API entegrasyonu (`orchestrator/api.py`: FastAPI; POST /api/gorev,
+      GET /api/durum canlı log yoklama, GET /api/saglik; 5 test)
+- [x] Next.js UI (`ui/`: görev formu, model seçimi, Docker anahtarı, ajan renkli canlı
+      log akışı, doğrulama sonucu + plan + reviewer raporu; koyu tema)
 - [ ] ui-ux-pro-max design tool entegrasyonu
 - [ ] Embedding tabanlı repo indexleme (bağlam seçimi için)
-- [ ] UI ↔ orkestratör API entegrasyonu
+- [ ] UI üzerinden uçtan uca gerçek görev (kota sıfırlanınca; CLI'daki temiz tam turla birlikte)
