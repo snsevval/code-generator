@@ -53,11 +53,29 @@ Ajanların dosya sistemi ve kabukla güvenli etkileşimini sağlayan katman.
 
 Orkestratörün yönettiği çok-ajanlı üretim döngüsü.
 
-- [ ] Orkestratör: Planner → Codegen → Test/Validator → Debugger → Reviewer akışı
-- [ ] 4 ajan tanımı ve sistem promptları (Planner, Codegen, Reviewer, Debugger, Test/Validator)
-- [ ] Dosya bazlı state yönetimi (oturumlar arası devam edebilme)
-- [ ] Model routing (ajan başına farklı model seçimi)
-- [ ] Uçtan uca döngü testi (örnek görev: küçük bir CLI aracı üretimi)
+- [x] Orkestratör: Planner → Codegen → Test/Validator → Debugger → Reviewer akışı
+      (`orchestrator/loop.py`; debugger↔validator döngüsü en çok 3 tur)
+- [x] 5 ajan tanımı ve sistem promptları (`orchestrator/agents.py`; ajan başına araç izni)
+- [x] Dosya bazlı state yönetimi (`orchestrator/state.py`; `.state/oturum.json`, `--devam`
+      ile kaldığı yerden sürer)
+- [x] Model routing (ajan başına `FCC_MODEL_<AJAN>`, genel `FCC_MODEL`; varsayılan
+      gemini/gemini-2.5-flash)
+- [x] Orkestratör birim testleri (11 test, sahte LLM istemcisiyle ağsız)
+- [ ] Uçtan uca döngü testi (örnek görev: küçük bir CLI aracı üretimi) — mekanizma canlıda
+      doğrulandı (tüm ajanlar + debugger döngüsü işledi) ama iki koşu da sağlayıcı günlük
+      kotasına takıldı; temiz bir tam tur, kota sıfırlanınca koşulacak
+
+### Faz 2 iyileştirme listesi (2026-07-08 canlı koşu bulguları)
+
+- [ ] **Rol sınırlarını kodda zorla:** Validator, sistem promptundaki yasağa rağmen mevcut
+      dosyaları yeniden yazıyor (özellikle Llama). Prompt yerine orkestratör düzeyinde
+      mekanik kısıt gerek: validator'ın write_file'ı yalnızca var olmayan dosyalara izinli.
+- [ ] **Token verimliliği:** ajan geçmişinde biriken tool_result'lar günlük kotayı hızla
+      tüketiyor (Groq 100k TPD iki koşuda bitti). Uzun araç çıktılarında kırpma ve/veya
+      geçmiş özetleme ekle.
+- [ ] Model kalite notu: Llama 3.3 70B kod kalitesi zayıf (unicode-kaçışlı Türkçe metin,
+      yazım hatası, exec tabanlı kırılgan test). Codegen/Debugger için Gemini tercih;
+      Llama ancak Planner/Reviewer gibi hafif roller için düşünülmeli.
 
 ## Faz 3 — UI ve İndeksleme
 

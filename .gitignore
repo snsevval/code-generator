@@ -25,6 +25,9 @@ uv.lock
 workspace/*
 !workspace/.gitkeep
 
+# Orkestratör oturum state'i
+.state/
+
 # IDE / OS
 .vscode/
 .idea/

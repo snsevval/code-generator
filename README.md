@@ -38,6 +38,23 @@ Script aynı tool tanımlı isteği proxy'ye 10 kez gönderir; her cevapta `tool
 varlığını, tool adının doğruluğunu (`read_file`) ve zorunlu `path` parametresinin geçerliliğini
 kontrol eder. Sonunda `X/10 başarılı` özeti ve başarısızlıkların hata tipi dağılımını basar.
 
+## Faz 2 — Agentic döngü
+
+Proxy açıkken bir görevi uçtan uca çalıştırmak için:
+
+```powershell
+uv run python -m orchestrator "fibonacci hesaplayan küçük bir CLI aracı yaz"
+
+# Seçenekler:
+#   --workspace <klasör>  çalışma alanı (varsayılan: workspace)
+#   --docker              run_shell komutlarını ağa kapalı Docker sandbox'ta koşar
+#   --devam               kesilen görevi .state/oturum.json'dan sürdürür
+```
+
+Akış: Planner → Codegen → Test/Validator → (başarısızsa Debugger, en çok 3 tur) → Reviewer.
+Model seçimi: `FCC_MODEL` tüm ajanları, `FCC_MODEL_PLANNER` gibi değişkenler tek ajanı
+değiştirir (varsayılan: `gemini/gemini-2.5-flash`).
+
 ## Proje yapısı
 
 | Klasör          | İçerik                                              |

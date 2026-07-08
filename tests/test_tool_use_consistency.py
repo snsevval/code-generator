@@ -198,8 +198,20 @@ def rapor_bas(sonuclar: list[Sonuc]) -> int:
     return basarili
 
 
+def _proxy_ayakta() -> bool:
+    try:
+        httpx.get(PROXY_URL.replace("/v1/messages", "/health"), timeout=5.0)
+        return True
+    except httpx.TransportError:
+        return False
+
+
 def test_tool_use_tutarliligi():
     """pytest girişi: 10 denemenin tamamı geçerli tool_use üretmeli."""
+    import pytest
+
+    if not _proxy_ayakta():
+        pytest.skip("proxy (fcc-server) çalışmıyor — entegrasyon testi atlandı")
     sonuclar = denemeleri_calistir()
     basarili = rapor_bas(sonuclar)
     assert basarili == len(sonuclar), (
