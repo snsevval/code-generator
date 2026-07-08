@@ -56,9 +56,13 @@ class LLMIstemcisi:
         messages: list[dict],
         system: str | None = None,
         tools: list[dict] | None = None,
-        max_tokens: int = 8192,
+        max_tokens: int | None = None,
     ) -> dict:
         """Bir Messages isteği gönderir, ham cevap sözlüğünü döndürür."""
+        if max_tokens is None:
+            # Bazı sağlayıcılar (örn. Groq) max_tokens'ı isteğin token bütçesine
+            # peşinen sayar; gereksiz büyük değer günlük kotayı hızla eritir
+            max_tokens = int(os.environ.get("FCC_MAX_TOKENS", "4096"))
         govde: dict = {
             "model": model,
             "max_tokens": max_tokens,
