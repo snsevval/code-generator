@@ -178,6 +178,14 @@
   margin-bottom: var(--aralik-3);
 }
 
+.kullanim {
+  font-family: var(--font-kod), ui-monospace, monospace;
+  font-size: 0.72rem;
+  color: var(--metin-ikincil);
+  margin: calc(-1 * var(--aralik-2)) 0 var(--aralik-3);
+  font-variant-numeric: tabular-nums;
+}
+
 .spinner {
   animation: don 0.9s linear infinite;
   color: var(--aksan);

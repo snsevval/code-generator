@@ -22,7 +22,9 @@ def proje_kur(tmp_path, senaryo, onay_callback=None):
     istemci = FakeIstemci(senaryo)
     ws = tmp_path / "ws"
     ws.mkdir(exist_ok=True)
-    ork = Orkestrator(ws, istemci=istemci, state_yolu=tmp_path / "ic.json", log=False)
+    ork = Orkestrator(
+        ws, istemci=istemci, state_yolu=tmp_path / "ic.json", log=False, git=False
+    )
     proje = ProjeOrkestratoru(
         ws, orkestrator=ork, state_klasoru=tmp_path / "st", log=False,
         onay_callback=onay_callback,

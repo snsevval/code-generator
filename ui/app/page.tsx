@@ -19,6 +19,8 @@ type Sonuc = {
   entegrasyon?: string;
 };
 
+type Kullanim = { istek: number; girdi: number; cikti: number };
+
 type Durum = {
   calisiyor: boolean;
   gorev: string | null;
@@ -26,7 +28,12 @@ type Durum = {
   hata: string | null;
   sonuc: Sonuc | null;
   onay_bekleyen: { id: number; gorev: string } | null;
+  kullanim: Kullanim | null;
 };
+
+function tokenBicimle(n: number): string {
+  return n >= 10000 ? `${(n / 1000).toFixed(1)}k` : String(n);
+}
 
 type Saglik = { api: boolean; proxy: boolean };
 
@@ -240,6 +247,13 @@ export default function Anasayfa() {
             {durum.calisiyor && <Spinner />}
             <span>{durum.gorev}</span>
           </h2>
+
+          {durum.kullanim && durum.kullanim.istek > 0 && (
+            <p className={styles.kullanim}>
+              Token: {tokenBicimle(durum.kullanim.girdi)} giriş ·{" "}
+              {tokenBicimle(durum.kullanim.cikti)} çıkış · {durum.kullanim.istek} istek
+            </p>
+          )}
 
           {durum.sonuc?.alt_gorevler && (
             <ul className={styles.altGorevler} aria-label="Alt görevler">

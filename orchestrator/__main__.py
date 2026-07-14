@@ -48,6 +48,14 @@ def main() -> int:
     executor = ToolExecutor(workspace, shell_runner=runner)
     orkestrator = Orkestrator(workspace, executor=executor)
 
+    def kullanim_ozeti() -> None:
+        k = getattr(orkestrator.istemci, "kullanim", None)
+        if k:
+            print(
+                f"Token kullanımı: {k['girdi']} giriş + {k['cikti']} çıkış "
+                f"({k['istek']} istek)"
+            )
+
     if args.proje:
         proje = ProjeOrkestratoru(workspace, orkestrator=orkestrator)
         pstate = proje.hedef_calistir(args.gorev, devam=args.devam)
@@ -57,6 +65,7 @@ def main() -> int:
             isaret = {"basarili": "[x]", "basarisiz": "[!]"}.get(alt["durum"], "[ ]")
             print(f"  {isaret} {alt['id']}. {alt['gorev']}")
         print(f"Entegrasyon doğrulaması: {pstate.entegrasyon or '(yapılmadı)'}")
+        kullanim_ozeti()
         print("=" * 60)
         tamam = (
             all(a["durum"] == "basarili" for a in pstate.alt_gorevler)
@@ -72,6 +81,7 @@ def main() -> int:
     print(f"Debug turu: {state.debug_turu}")
     print("\n--- Reviewer raporu ---\n")
     print(state.ciktilar.get("reviewer", "(yok)"))
+    kullanim_ozeti()
     print("=" * 60)
     return 0 if state.ciktilar.get("dogrulama_gecti") == "True" else 1
 

@@ -43,7 +43,7 @@ def orkestrator_kur(tmp_path, senaryo):
     ws = tmp_path / "ws"
     ws.mkdir(exist_ok=True)
     ork = Orkestrator(
-        ws, istemci=istemci, state_yolu=tmp_path / "state.json", log=False
+        ws, istemci=istemci, state_yolu=tmp_path / "state.json", log=False, git=False
     )
     return ork, istemci
 

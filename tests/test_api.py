@@ -99,6 +99,11 @@ def test_cokme_hata_olarak_doner(istemci, monkeypatch):
     _bekle_bitsin(istemci)
 
 
+def test_durum_kullanim_alani_icerir(istemci):
+    veri = istemci.get("/api/durum").json()
+    assert "kullanim" in veri  # koşu yokken None olabilir
+
+
 def test_saglik_endpointi(istemci):
     veri = istemci.get("/api/saglik").json()
     assert veri["api"] is True

@@ -48,6 +48,8 @@ class LLMIstemcisi:
         self._url = f"{taban}/v1/messages"
         self._auth = auth_token or os.environ.get("ANTHROPIC_AUTH_TOKEN", "freecc")
         self._istemci = httpx.Client(timeout=zaman_asimi)
+        # Token sayacı: kota takibi için oturum boyunca birikir
+        self.kullanim = {"istek": 0, "girdi": 0, "cikti": 0}
 
     def mesaj_gonder(
         self,
@@ -99,6 +101,10 @@ class LLMIstemcisi:
                 veri = yanit.json()
                 saglayici_hatasi = _saglayici_hata_metni(veri)
                 if saglayici_hatasi is None:
+                    k = veri.get("usage") or {}
+                    self.kullanim["istek"] += 1
+                    self.kullanim["girdi"] += int(k.get("input_tokens") or 0)
+                    self.kullanim["cikti"] += int(k.get("output_tokens") or 0)
                     return veri
                 son_hata = saglayici_hatasi
 

@@ -20,6 +20,7 @@ from orchestrator.agents import (
     BASARISIZLIK_ISARETI,
     AjanTanimi,
 )
+from orchestrator.git_deposu import GitDeposu
 from orchestrator.llm_client import LLMIstemcisi
 from orchestrator.state import OturumState
 from orchestrator.tool_executor import TOOL_TANIMLARI, ToolExecutor, ToolSonucu
@@ -78,11 +79,18 @@ class Orkestrator:
         executor: ToolExecutor | None = None,
         state_yolu: Path | str = ".state/oturum.json",
         log: bool | object = True,
+        git: GitDeposu | None | bool = True,
     ):
         self.executor = executor or ToolExecutor(workspace)
         self.istemci = istemci or LLMIstemcisi()
         self.state_yolu = Path(state_yolu)
         self._log = log
+        # git=True: otomatik kur (FCC_GIT=0 veya git yoksa sessizce kapalı),
+        # git=False/None: kapalı, GitDeposu örneği: onu kullan
+        if git is True:
+            self.git = GitDeposu.olustur(self.executor.workspace)
+        else:
+            self.git = git or None
 
     def _yaz(self, mesaj: str) -> None:
         # log: False → sessiz, True → stdout, çağrılabilir → callback (UI akışı için)
@@ -167,10 +175,17 @@ class Orkestrator:
             self._yaz(f"[{ad}] atlandı (önceki oturumda tamamlanmış)")
             return state.ciktilar[ad]
         self._yaz(f"[{ad}] başlıyor...")
+        onceki = dict(getattr(self.istemci, "kullanim", None) or {})
         cikti = self.ajan_calistir(AJANLAR[ad], gorev_metni)
         state.asama_bitti(ad, cikti)
         state.kaydet(self.state_yolu)
-        self._yaz(f"[{ad}] bitti.")
+        kullanim = getattr(self.istemci, "kullanim", None)
+        if kullanim:
+            girdi = kullanim["girdi"] - onceki.get("girdi", 0)
+            cikis = kullanim["cikti"] - onceki.get("cikti", 0)
+            self._yaz(f"[{ad}] bitti. ({girdi} giriş + {cikis} çıkış token)")
+        else:
+            self._yaz(f"[{ad}] bitti.")
         return cikti
 
     @staticmethod
@@ -259,4 +274,11 @@ class Orkestrator:
             f"Görev: {gorev}\n\nÜretilen işi incele ve raporla.",
         )
         state.kaydet(self.state_yolu)
+
+        # Workspace değişikliklerini tarihçeye yaz (izlenebilirlik + geri alma)
+        if self.git:
+            ozet = gorev.strip().splitlines()[0][:60]
+            etiket = "basarili" if gecti else "basarisiz"
+            if self.git.commit(f"orkestratör: {ozet} [{etiket}]"):
+                self._yaz("[git] workspace değişiklikleri commit'lendi")
         return state

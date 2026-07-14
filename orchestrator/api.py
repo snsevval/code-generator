@@ -65,6 +65,8 @@ class _Durum:
         self.onay_bekleyen: dict | None = None
         self.onay_olayi = threading.Event()
         self.onay_karari = False
+        # Koşan orkestratörün LLM istemcisi (token sayacı buradan okunur)
+        self.istemci = None
 
 
 DURUM = _Durum()
@@ -80,6 +82,7 @@ def _gorev_kos(istek: GorevIstegi) -> None:
         runner = DockerShellRunner(ws) if istek.docker else None
         log = lambda satir: DURUM.log.append(satir)  # noqa: E731
         ork = ORKESTRATOR_FABRIKASI(ws, ToolExecutor(ws, shell_runner=runner), log)
+        DURUM.istemci = getattr(ork, "istemci", None)
         if istek.proje:
             onay = _onay_bekle if istek.onayli else None
             proje = ProjeOrkestratoru(ws, orkestrator=ork, log=log, onay_callback=onay)
@@ -158,6 +161,7 @@ def durum():
         "hata": DURUM.hata,
         "sonuc": DURUM.sonuc,
         "onay_bekleyen": DURUM.onay_bekleyen,
+        "kullanim": getattr(DURUM.istemci, "kullanim", None),
     }
 
 

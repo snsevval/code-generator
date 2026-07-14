@@ -119,3 +119,14 @@ rol kısıtları) ve yeterli kota.
       güvenli tarafta durur)
 - [x] Sertleştirme: dosya değiştiremeyen roller (validator) artık kabuk üzerinden de
       silme/taşıma/yönlendirme (`del`, `rm`, `move`, `>` vb.) yapamıyor
+
+## Faz 5 — Kullanım ve Cilalama
+
+- [x] **Git entegrasyonu** (`orchestrator/git_deposu.py`): workspace'te otomatik repo;
+      her görev/alt görev sonunda otomatik commit ("orkestratör: <görev> [durum]") —
+      ajan değişiklikleri tarihçede izlenir, geri alınabilir; `FCC_GIT=0` kapatır
+- [x] **Token sayacı**: LLM istemcisi kullanım biriktirir; aşama loglarında delta,
+      CLI özetinde ve arayüzde (canlı) toplam giriş/çıkış token + istek sayısı
+- [ ] Görev kuyruğu (API'de aynı anda tek görev sınırının ötesi)
+- [ ] Docker sandbox'ı varsayılan yapmak
+- [ ] Güçlü/ücretli model karşılaştırması
