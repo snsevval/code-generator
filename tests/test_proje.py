@@ -110,6 +110,54 @@ def test_devam_basarili_alt_gorevleri_atlar(tmp_path):
     assert "PLANNER" in istemci2.istekler[0]["system"]
 
 
+def test_gorev_metni_sabitlenir_ve_devamda_ayni_kalir(tmp_path):
+    """Alt görev metni ilk üretimde state'e yazılır; workspace değişse de
+    devamda aynı metin kullanılır (iç-döngü devamının ön koşulu)."""
+    senaryo = [bolme_cevabi("a")] + ic_dongu(gecti=False)
+    proje, _ = proje_kur(tmp_path, senaryo)
+    state1 = proje.hedef_calistir("hedef")
+    kayitli_metin = state1.alt_gorevler[0]["gorev_metni"]
+    assert "Workspace'teki mevcut dosyalar" in kayitli_metin
+
+    # Workspace'e dosya eklense bile devamda kayıtlı metin değişmemeli
+    (proje.ork.executor.workspace / "sonradan.txt").write_text("x", encoding="utf-8")
+    for f in (tmp_path / "st").glob("alt_*.json"):
+        f.unlink()
+    proje2, istemci2 = proje_kur(tmp_path, ic_dongu())
+    proje2.state_klasoru = proje.state_klasoru
+    proje2.hedef_calistir("hedef", devam=True)
+
+    assert istemci2.istekler[0]["messages"][0]["content"].endswith(
+        kayitli_metin.split("Görev: ")[-1]
+    ) or kayitli_metin in istemci2.istekler[0]["messages"][0]["content"]
+
+
+def test_tikanan_alt_gorev_zinciri_duzgun_durdurur(tmp_path):
+    class TikananOrk:
+        class executor:  # list_files için asgari arayüz
+            @staticmethod
+            def list_files():
+                from orchestrator.tool_executor import ToolSonucu
+
+                return ToolSonucu(True, "(klasör boş)")
+
+        state_yolu = None
+
+        def ajan_calistir(self, ajan, metin):
+            return '[{"id": 1, "gorev": "tek iş", "kabul": "olsun"}]'
+
+        def gorev_calistir(self, gorev, devam=False):
+            raise OrkestrasyonHatasi("codegen ajanı 25 tool turunda görevi bitiremedi")
+
+    proje = ProjeOrkestratoru(tmp_path, orkestrator=TikananOrk(), state_klasoru=tmp_path / "st", log=False)
+    state = proje.hedef_calistir("hedef")  # exception yükseltmemeli
+
+    assert state.alt_gorevler[0]["durum"] == "basarisiz"
+    assert "tıkandı" in state.alt_gorevler[0]["ozet"]
+    # State diske düzgün yazılmış olmalı
+    assert ProjeState.yukle(proje.proje_state_yolu).alt_gorevler[0]["durum"] == "basarisiz"
+
+
 def test_farkli_hedef_sifirdan_bolunur(tmp_path):
     eski = ProjeState(hedef="eski hedef", alt_gorevler=[{"id": 1, "gorev": "x", "kabul": "", "durum": "basarili", "ozet": ""}])
     proje, istemci = proje_kur(tmp_path, [bolme_cevabi("yeni iş")] + ic_dongu())

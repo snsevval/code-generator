@@ -177,6 +177,14 @@ def test_shell_bos_komut(executor):
     assert not executor.run_shell("").ok
 
 
+def test_shell_cok_satirli_komut_reddedilir(executor):
+    # Windows cmd çok satırlı komutu sessizce bozuyor; mekanik olarak reddedilmeli
+    sonuc = executor.run_shell('python -c "\nimport os\nprint(1)\n"')
+    assert not sonuc.ok
+    assert "çok satırlı" in sonuc.cikti
+    assert "write_file" in sonuc.cikti  # modele sağlam yol tarif edilmeli
+
+
 # --- Dispatcher ---
 
 

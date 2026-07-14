@@ -9,16 +9,26 @@ tümünü birden değiştirir (varsayılan: gemini/gemini-2.5-flash).
 from __future__ import annotations
 
 import os
+import platform
+import sys
 from dataclasses import dataclass
 
 # Test/Validator çıktısının son satırında aranan işaretler (ASCII, parse güvenliği için)
 BASARI_ISARETI = "SONUC: BASARILI"
 BASARISIZLIK_ISARETI = "SONUC: BASARISIZ"
 
+_KABUK_NOTU = (
+    f" İşletim sistemi: {platform.system()}; run_shell komutları "
+    f"{'Windows cmd' if sys.platform == 'win32' else 'POSIX sh'} kabuğunda koşar. "
+    "run_shell yalnızca TEK satırlık komut kabul eder — çok satırlı kod için önce "
+    "write_file ile script yaz, sonra çalıştır. Python'u "
+    f"{'python' if sys.platform == 'win32' else 'python3'} olarak çağır."
+)
+
 _ORTAK = (
     "Agentic bir kod üretim hattında görevli bir ajansın. Çalışma alanın workspace "
     "köküdür; tüm dosya yolları bu köke görelidir ve dışına çıkamazsın. Araç "
-    "çağrılarında şemaya birebir uy. Kısa ve net Türkçe yaz."
+    "çağrılarında şemaya birebir uy. Kısa ve net Türkçe yaz." + _KABUK_NOTU
 )
 
 
@@ -33,10 +43,15 @@ class AjanTanimi:
 
     @property
     def model(self) -> str:
-        """Ajanın modeli: FCC_MODEL_<AD> > FCC_MODEL > varsayılan."""
+        """Ajanın modeli: FCC_MODEL_<AD> > FCC_MODEL > proxy varsayılan rotası.
+
+        Varsayılan, provider öneki olmayan bir Claude adıdır; proxy bunu kendi
+        MODEL ayarına (admin panelden seçilen sağlayıcıya) yönlendirir. Böylece
+        sağlayıcı tercihi tek yerden (proxy) yönetilir.
+        """
         return os.environ.get(
             f"FCC_MODEL_{self.ad.upper()}",
-            os.environ.get("FCC_MODEL", "gemini/gemini-2.5-flash"),
+            os.environ.get("FCC_MODEL", "claude-sonnet-4-20250514"),
         )
 
 

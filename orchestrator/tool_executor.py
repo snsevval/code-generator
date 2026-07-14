@@ -283,6 +283,14 @@ class ToolExecutor:
     def run_shell(self, command: str, timeout: float | None = None) -> ToolSonucu:
         if not command or not command.strip():
             return ToolSonucu(False, "HATA: command boş olamaz")
+        if "\n" in command.strip():
+            # Windows cmd çok satırlı komutu sessizce bozuyor; modeli sağlam yola it
+            return ToolSonucu(
+                False,
+                "HATA: çok satırlı komut desteklenmiyor. Çok satırlı kod çalıştırmak "
+                "için önce write_file ile bir script dosyası yaz, sonra onu tek "
+                "satırlık komutla çalıştır (örn. 'python script.py').",
+            )
         zaman_asimi = timeout if timeout and timeout > 0 else VARSAYILAN_ZAMAN_ASIMI_SN
         try:
             sonuc = self._shell.calistir(command, zaman_asimi)

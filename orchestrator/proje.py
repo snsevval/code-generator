@@ -115,11 +115,24 @@ class ProjeOrkestratoru:
                 continue
 
             self._yaz(f"[proje] alt görev {alt['id']}/{len(state.alt_gorevler)}: {alt['gorev']}")
+            # Görev metni bir kez üretilip state'e yazılır: metin, o anki dosya
+            # listesini içerdiğinden her üretimde değişir; sabitlemezsek iç-döngü
+            # devam mekanizması görevi tanıyamaz ve baştan başlar
+            if not alt.get("gorev_metni"):
+                alt["gorev_metni"] = self._alt_gorev_metni(state, alt)
+                state.kaydet(self.proje_state_yolu)
             # Her alt görevin kendi iç-döngü state'i olur (kesintide iç devam için)
             self.ork.state_yolu = self.state_klasoru / f"alt_{alt['id']}.json"
-            oturum = self.ork.gorev_calistir(
-                self._alt_gorev_metni(state, alt), devam=devam
-            )
+            try:
+                oturum = self.ork.gorev_calistir(alt["gorev_metni"], devam=devam)
+            except OrkestrasyonHatasi as e:
+                # Tek alt görevin tıkanması (örn. tool turu sınırı) zinciri sert
+                # düşürmesin: görevi başarısız işaretle ve düzgünce dur
+                self._yaz(f"[proje] alt görev {alt['id']} tıkandı: {e}")
+                alt["durum"] = "basarisiz"
+                alt["ozet"] = f"tıkandı: {e}"[:OZET_SINIRI]
+                state.kaydet(self.proje_state_yolu)
+                break
 
             gecti = oturum.ciktilar.get("dogrulama_gecti") == "True"
             alt["durum"] = "basarili" if gecti else "basarisiz"

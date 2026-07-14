@@ -61,9 +61,11 @@ Orkestratörün yönettiği çok-ajanlı üretim döngüsü.
 - [x] Model routing (ajan başına `FCC_MODEL_<AJAN>`, genel `FCC_MODEL`; varsayılan
       gemini/gemini-2.5-flash)
 - [x] Orkestratör birim testleri (11 test, sahte LLM istemcisiyle ağsız)
-- [x] Uçtan uca döngü testi — **temiz tam tur başarılı (2026-07-14, NIM Nemotron):**
+- [x] Uçtan uca döngü testi — **temiz tam tur başarılı (2026-07-14, Gemini 2.5 Flash):**
       doğrulama ilk denemede geçti (0 debug turu), validator dosyalara dokunmadı,
-      6/6 pytest + elle doğrulama; reviewer isabetli eksik-test önerileri raporladı
+      6/6 pytest + elle doğrulama; reviewer isabetli eksik-test önerileri raporladı.
+      (Düzeltme notu: koşu sırada ajan varsayılanı kodda gemini'ye sabitlenmişti; artık
+      varsayılan, proxy'nin MODEL rotasına — yani NIM'e — gidiyor.)
 
 ### Faz 2 iyileştirme listesi (2026-07-08 canlı koşu bulguları)
 
