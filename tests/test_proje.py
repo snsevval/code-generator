@@ -18,12 +18,15 @@ from orchestrator.state import ProjeState
 from tests.test_orchestrator import FakeIstemci, metin_cevap
 
 
-def proje_kur(tmp_path, senaryo):
+def proje_kur(tmp_path, senaryo, onay_callback=None):
     istemci = FakeIstemci(senaryo)
     ws = tmp_path / "ws"
     ws.mkdir(exist_ok=True)
     ork = Orkestrator(ws, istemci=istemci, state_yolu=tmp_path / "ic.json", log=False)
-    proje = ProjeOrkestratoru(ws, orkestrator=ork, state_klasoru=tmp_path / "st", log=False)
+    proje = ProjeOrkestratoru(
+        ws, orkestrator=ork, state_klasoru=tmp_path / "st", log=False,
+        onay_callback=onay_callback,
+    )
     return proje, istemci
 
 
@@ -69,17 +72,76 @@ def test_json_ayikla_gecersizleri_reddeder(bozuk):
 
 
 def test_mutlu_yol_iki_alt_gorev(tmp_path):
-    senaryo = [bolme_cevabi("modeli yaz", "cli yaz")] + ic_dongu() + ic_dongu()
+    senaryo = (
+        [bolme_cevabi("modeli yaz", "cli yaz")]
+        + ic_dongu()
+        + ic_dongu()
+        + [metin_cevap(BASARI_ISARETI)]  # final entegrasyon doğrulaması
+    )
     proje, istemci = proje_kur(tmp_path, senaryo)
 
     state = proje.hedef_calistir("küçük araç yap")
 
     assert [a["durum"] for a in state.alt_gorevler] == ["basarili", "basarili"]
     assert all(a["ozet"] == "kodu yazdım" for a in state.alt_gorevler)
+    assert state.entegrasyon == "basarili"
     # İkinci alt görevin girdisinde birincinin özeti taşınmalı
     ikinci_girdi = istemci.istekler[5]["messages"][0]["content"]
     assert "modeli yaz: kodu yazdım" in ikinci_girdi
     assert "Workspace'teki mevcut dosyalar" in ikinci_girdi
+    # Entegrasyon isteği bütünü vurgulamalı
+    son_girdi = istemci.istekler[-1]["messages"][0]["content"]
+    assert "BİRLİKTE" in son_girdi
+
+
+def test_entegrasyon_basarisiz_kaydedilir(tmp_path):
+    senaryo = [bolme_cevabi("a")] + ic_dongu() + [metin_cevap(BASARISIZLIK_ISARETI)]
+    proje, _ = proje_kur(tmp_path, senaryo)
+    state = proje.hedef_calistir("hedef")
+    assert state.alt_gorevler[0]["durum"] == "basarili"
+    assert state.entegrasyon == "basarisiz"
+
+
+def test_zincir_tamamlanmadan_entegrasyon_yapilmaz(tmp_path):
+    senaryo = [bolme_cevabi("a", "b")] + ic_dongu() + ic_dongu(gecti=False)
+    proje, _ = proje_kur(tmp_path, senaryo)
+    state = proje.hedef_calistir("hedef")
+    assert state.entegrasyon == ""  # ikinci alt görev kaldı; entegrasyona geçilmedi
+
+
+def test_onay_callback_durdurur(tmp_path):
+    sorulanlar = []
+
+    def onay(alt):
+        sorulanlar.append(alt["id"])
+        return False  # kullanıcı durdurdu
+
+    senaryo = [bolme_cevabi("a", "b")] + ic_dongu()
+    proje, _ = proje_kur(tmp_path, senaryo, onay_callback=onay)
+    state = proje.hedef_calistir("hedef")
+
+    assert sorulanlar == [1]
+    assert [a["durum"] for a in state.alt_gorevler] == ["basarili", "bekliyor"]
+    assert state.entegrasyon == ""  # zincir yarıda; entegrasyon koşulmadı
+
+
+def test_onay_callback_devamda_zincir_tamamlanir(tmp_path):
+    sorulanlar = []
+
+    def onay(alt):
+        sorulanlar.append(alt["id"])
+        return True
+
+    senaryo = (
+        [bolme_cevabi("a", "b")] + ic_dongu() + ic_dongu() + [metin_cevap(BASARI_ISARETI)]
+    )
+    proje, _ = proje_kur(tmp_path, senaryo, onay_callback=onay)
+    state = proje.hedef_calistir("hedef")
+
+    # Son alt görevden sonra onay sorulmaz (kalan iş yok, entegrasyona geçilir)
+    assert sorulanlar == [1]
+    assert [a["durum"] for a in state.alt_gorevler] == ["basarili", "basarili"]
+    assert state.entegrasyon == "basarili"
 
 
 def test_basarisiz_alt_gorev_zinciri_durdurur(tmp_path):
@@ -100,12 +162,13 @@ def test_devam_basarili_alt_gorevleri_atlar(tmp_path):
     # İç döngü state'i temizlenir ki alt görev baştan denensin.
     for f in (tmp_path / "st").glob("alt_*.json"):
         f.unlink()
-    proje2, istemci2 = proje_kur(tmp_path, ic_dongu())
+    proje2, istemci2 = proje_kur(tmp_path, ic_dongu() + [metin_cevap(BASARI_ISARETI)])
     proje2.state_klasoru = proje.state_klasoru
 
     state = proje2.hedef_calistir("hedef", devam=True)
 
     assert [a["durum"] for a in state.alt_gorevler] == ["basarili", "basarili"]
+    assert state.entegrasyon == "basarili"
     # decomposer çağrılmadı: ilk istek doğrudan planner'a gitmiş olmalı
     assert "PLANNER" in istemci2.istekler[0]["system"]
 
@@ -123,7 +186,7 @@ def test_gorev_metni_sabitlenir_ve_devamda_ayni_kalir(tmp_path):
     (proje.ork.executor.workspace / "sonradan.txt").write_text("x", encoding="utf-8")
     for f in (tmp_path / "st").glob("alt_*.json"):
         f.unlink()
-    proje2, istemci2 = proje_kur(tmp_path, ic_dongu())
+    proje2, istemci2 = proje_kur(tmp_path, ic_dongu() + [metin_cevap(BASARI_ISARETI)])
     proje2.state_klasoru = proje.state_klasoru
     proje2.hedef_calistir("hedef", devam=True)
 
@@ -160,7 +223,9 @@ def test_tikanan_alt_gorev_zinciri_duzgun_durdurur(tmp_path):
 
 def test_farkli_hedef_sifirdan_bolunur(tmp_path):
     eski = ProjeState(hedef="eski hedef", alt_gorevler=[{"id": 1, "gorev": "x", "kabul": "", "durum": "basarili", "ozet": ""}])
-    proje, istemci = proje_kur(tmp_path, [bolme_cevabi("yeni iş")] + ic_dongu())
+    proje, istemci = proje_kur(
+        tmp_path, [bolme_cevabi("yeni iş")] + ic_dongu() + [metin_cevap(BASARI_ISARETI)]
+    )
     eski.kaydet(proje.proje_state_yolu)
 
     state = proje.hedef_calistir("yepyeni hedef", devam=True)

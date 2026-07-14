@@ -48,10 +48,14 @@ class ProjeOrkestratoru:
         orkestrator: Orkestrator | None = None,
         state_klasoru: Path | str = ".state",
         log: bool | object = True,
+        onay_callback=None,
     ):
         self.state_klasoru = Path(state_klasoru)
         self.ork = orkestrator or Orkestrator(workspace, log=log)
         self._log = log
+        # Verilirse her başarılı alt görevden sonra çağrılır (alt görev dict'iyle);
+        # False dönerse zincir durdurulur (UI'deki insan onay noktası)
+        self._onay = onay_callback
 
     def _yaz(self, mesaj: str) -> None:
         if callable(self._log):
@@ -147,4 +151,35 @@ class ProjeOrkestratoru:
                 )
                 break
 
+            # İnsan onay noktası: kalan görev varsa ve callback tanımlıysa sor
+            kalan_var = any(a["durum"] == "bekliyor" for a in state.alt_gorevler)
+            if self._onay is not None and kalan_var:
+                self._yaz(f"[proje] alt görev {alt['id']} tamamlandı — onay bekleniyor...")
+                if not self._onay(alt):
+                    self._yaz("[proje] kullanıcı zinciri durdurdu.")
+                    break
+
+        self._entegrasyonu_dogrula(state)
         return state
+
+    def _entegrasyonu_dogrula(self, state: ProjeState) -> None:
+        """Tüm alt görevler bittiyse parçaların birlikte çalıştığını sınar."""
+        if state.entegrasyon == "basarili":
+            self._yaz("[proje] entegrasyon doğrulaması atlandı (önceden geçmiş)")
+            return
+        if not all(a["durum"] == "basarili" for a in state.alt_gorevler):
+            return  # zincir tamamlanmadı; entegrasyona geçilmez
+
+        self._yaz("[proje] final entegrasyon doğrulaması başlıyor...")
+        liste = "\n".join(f"- [{a['id']}] {a['gorev']}" for a in state.alt_gorevler)
+        cikti = self.ork.ajan_calistir(
+            AJANLAR["validator"],
+            f"Proje hedefi: {state.hedef}\n\nTamamlanan alt görevler:\n{liste}\n\n"
+            "Parçaların BİRLİKTE çalıştığını uçtan uca doğrula: tüm testleri koş "
+            "(pytest) ve ana kullanım akışını gerçekten dene. Tek tek modüller değil, "
+            "bütün önemli.",
+        )
+        gecti = self.ork.dogrulamayi_coz(cikti)
+        state.entegrasyon = "basarili" if gecti else "basarisiz"
+        state.kaydet(self.proje_state_yolu)
+        self._yaz(f"[proje] entegrasyon doğrulaması: {state.entegrasyon.upper()}")

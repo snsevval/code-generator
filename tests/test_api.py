@@ -105,11 +105,55 @@ def test_saglik_endpointi(istemci):
     assert isinstance(veri["proxy"], bool)
 
 
+def test_onay_akisi(istemci, monkeypatch):
+    """Onaylı proje modunda zincir kullanıcı kararını bekler; Durdur zinciri keser."""
+    from orchestrator.state import ProjeState
+
+    class OnayliSahteProje:
+        def __init__(self, ws, orkestrator=None, log=None, onay_callback=None):
+            self._onay = onay_callback
+
+        def hedef_calistir(self, hedef, devam=False):
+            alt1 = {"id": 1, "gorev": "ilk iş", "kabul": "", "durum": "basarili", "ozet": ""}
+            alt2 = {"id": 2, "gorev": "ikinci iş", "kabul": "", "durum": "bekliyor", "ozet": ""}
+            devam_mi = self._onay(alt1)  # gerçek akıştaki gibi bloklar
+            if devam_mi:
+                alt2["durum"] = "basarili"
+            return ProjeState(hedef=hedef, alt_gorevler=[alt1, alt2])
+
+    monkeypatch.setattr(api, "ORKESTRATOR_FABRIKASI", lambda ws, ex, log: object())
+    monkeypatch.setattr(api, "ProjeOrkestratoru", OnayliSahteProje)
+
+    istemci.post("/api/gorev", json={"gorev": "hedef", "proje": True, "onayli": True})
+
+    # Onay bekleyene dek yokla
+    son = time.monotonic() + 5
+    while time.monotonic() < son:
+        veri = istemci.get("/api/durum").json()
+        if veri["onay_bekleyen"]:
+            break
+        time.sleep(0.05)
+    assert veri["onay_bekleyen"]["id"] == 1
+
+    # Durdur kararı gönder → zincir ikinciyi koşmadan bitmeli
+    yanit = istemci.post("/api/onay", json={"devam": False})
+    assert yanit.status_code == 200
+
+    veri = _bekle_bitsin(istemci)
+    assert veri["onay_bekleyen"] is None
+    durumlar = [a["durum"] for a in veri["sonuc"]["alt_gorevler"]]
+    assert durumlar == ["basarili", "bekliyor"]
+
+
+def test_onay_beklenmiyorken_karar_409(istemci):
+    assert istemci.post("/api/onay", json={"devam": True}).status_code == 409
+
+
 def test_proje_modu_alt_gorevleri_doner(istemci, monkeypatch):
     from orchestrator.state import ProjeState
 
     class SahteProje:
-        def __init__(self, ws, orkestrator=None, log=None):
+        def __init__(self, ws, orkestrator=None, log=None, onay_callback=None):
             self._log = log
 
         def hedef_calistir(self, hedef, devam=False):

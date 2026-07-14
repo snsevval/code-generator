@@ -41,6 +41,14 @@ class GorevIstegi(BaseModel):
     docker: bool = False
     devam: bool = False
     proje: bool = False  # True: hedef alt görevlere bölünüp zincir halinde koşulur
+    onayli: bool = False  # True: her alt görevden sonra kullanıcı onayı beklenir
+
+
+class OnayKarari(BaseModel):
+    devam: bool
+
+
+ONAY_ZAMAN_ASIMI_SN = 3600.0  # onay bu süre içinde gelmezse zincir güvenli tarafta durur
 
 
 class _Durum:
@@ -53,6 +61,10 @@ class _Durum:
         self.log: list[str] = []
         self.hata: str | None = None
         self.sonuc: dict | None = None
+        # Onay bekleyen alt görev bilgisi (None: onay beklenmiyor)
+        self.onay_bekleyen: dict | None = None
+        self.onay_olayi = threading.Event()
+        self.onay_karari = False
 
 
 DURUM = _Durum()
@@ -69,7 +81,8 @@ def _gorev_kos(istek: GorevIstegi) -> None:
         log = lambda satir: DURUM.log.append(satir)  # noqa: E731
         ork = ORKESTRATOR_FABRIKASI(ws, ToolExecutor(ws, shell_runner=runner), log)
         if istek.proje:
-            proje = ProjeOrkestratoru(ws, orkestrator=ork, log=log)
+            onay = _onay_bekle if istek.onayli else None
+            proje = ProjeOrkestratoru(ws, orkestrator=ork, log=log, onay_callback=onay)
             pstate = proje.hedef_calistir(istek.gorev, devam=istek.devam)
             DURUM.sonuc = {
                 "proje": True,
@@ -77,8 +90,10 @@ def _gorev_kos(istek: GorevIstegi) -> None:
                     {"id": a["id"], "gorev": a["gorev"], "durum": a["durum"]}
                     for a in pstate.alt_gorevler
                 ],
-                "dogrulama_gecti": all(
-                    a["durum"] == "basarili" for a in pstate.alt_gorevler
+                "entegrasyon": pstate.entegrasyon,
+                "dogrulama_gecti": (
+                    all(a["durum"] == "basarili" for a in pstate.alt_gorevler)
+                    and pstate.entegrasyon == "basarili"
                 ),
             }
         else:
@@ -94,6 +109,20 @@ def _gorev_kos(istek: GorevIstegi) -> None:
         DURUM.hata = f"{type(e).__name__}: {e}"
     finally:
         DURUM.calisiyor = False
+
+
+def _onay_bekle(alt: dict) -> bool:
+    """Onaylı proje modunda alt görev sonrası kullanıcı kararını bekler.
+
+    UI, /api/durum'dan onay_bekleyen'i görür; kullanıcı /api/onay'a karar
+    gönderince zincir sürer. Zaman aşımında güvenli tarafta durulur.
+    """
+    DURUM.onay_olayi.clear()
+    DURUM.onay_karari = False
+    DURUM.onay_bekleyen = {"id": alt["id"], "gorev": alt["gorev"]}
+    geldi = DURUM.onay_olayi.wait(timeout=ONAY_ZAMAN_ASIMI_SN)
+    DURUM.onay_bekleyen = None
+    return DURUM.onay_karari if geldi else False
 
 
 def _varsayilan_fabrika(ws: Path, executor: ToolExecutor, log) -> Orkestrator:
@@ -128,7 +157,17 @@ def durum():
         "log": DURUM.log,
         "hata": DURUM.hata,
         "sonuc": DURUM.sonuc,
+        "onay_bekleyen": DURUM.onay_bekleyen,
     }
+
+
+@app.post("/api/onay")
+def onay_ver(karar: OnayKarari):
+    if DURUM.onay_bekleyen is None:
+        raise HTTPException(409, "onay bekleyen bir alt görev yok")
+    DURUM.onay_karari = karar.devam
+    DURUM.onay_olayi.set()
+    return {"alindi": True, "devam": karar.devam}
 
 
 @app.get("/api/saglik")

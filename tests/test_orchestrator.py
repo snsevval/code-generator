@@ -107,6 +107,43 @@ def test_validator_mevcut_dosyayi_degistiremez(tmp_path):
     assert "değiştiremez" in sonuc["content"]
 
 
+@pytest.mark.parametrize(
+    "komut",
+    ["del notlar.json", "rm -rf klasor", "move a.txt b.txt", "echo x > mevcut.txt", "DEL /f a.py"],
+)
+def test_validator_yikici_kabuk_komutu_engellenir(tmp_path, komut):
+    senaryo = [tool_cevap("run_shell", {"command": komut}), metin_cevap("olmadı")]
+    ork, istemci = orkestrator_kur(tmp_path, senaryo)
+    (ork.executor.workspace / "notlar.json").write_text("[]", encoding="utf-8")
+
+    ork.ajan_calistir(AJANLAR["validator"], "doğrula")
+
+    sonuc = istemci.istekler[1]["messages"][-1]["content"][0]
+    assert sonuc["is_error"] is True
+    assert "silemez" in sonuc["content"]
+    assert (ork.executor.workspace / "notlar.json").exists()
+
+
+def test_validator_test_komutlari_calisir(tmp_path):
+    senaryo = [
+        tool_cevap("run_shell", {"command": "python -c \"print('pytest gibi')\""}),
+        metin_cevap("tamam"),
+    ]
+    ork, istemci = orkestrator_kur(tmp_path, senaryo)
+    ork.ajan_calistir(AJANLAR["validator"], "doğrula")
+    assert istemci.istekler[1]["messages"][-1]["content"][0]["is_error"] is False
+
+
+def test_debugger_kabuk_kisiti_yok(tmp_path):
+    # Kısıt yalnızca dosya değiştiremeyen roller için; debugger silme yapabilir
+    senaryo = [tool_cevap("run_shell", {"command": "del eski.txt"}), metin_cevap("ok")]
+    ork, istemci = orkestrator_kur(tmp_path, senaryo)
+    (ork.executor.workspace / "eski.txt").write_text("x", encoding="utf-8")
+    ork.ajan_calistir(AJANLAR["debugger"], "düzelt")
+    sonuc = istemci.istekler[1]["messages"][-1]["content"][0]
+    assert "silemez" not in sonuc["content"]
+
+
 def test_validator_yeni_dosya_yazabilir(tmp_path):
     senaryo = [
         tool_cevap("write_file", {"path": "test_yeni.py", "content": "assert True"}),

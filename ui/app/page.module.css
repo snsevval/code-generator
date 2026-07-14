@@ -232,6 +232,55 @@
   color: var(--metin-ikincil);
 }
 
+/* --- Onay paneli (adım adım onaylı proje modu) --- */
+
+.onayPaneli {
+  display: flex;
+  align-items: center;
+  gap: var(--aralik-4);
+  flex-wrap: wrap;
+  margin-bottom: var(--aralik-3);
+  padding: var(--aralik-3);
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--aksan) 40%, transparent);
+  background: color-mix(in srgb, var(--aksan) 8%, transparent);
+  font-size: 0.85rem;
+}
+
+.onayPaneli p {
+  flex: 1;
+  min-width: 200px;
+}
+
+.onayButonlari {
+  display: flex;
+  gap: var(--aralik-2);
+}
+
+.onayButonlari button {
+  min-height: 44px;
+  padding: 0 var(--aralik-4);
+  border-radius: 8px;
+  border: none;
+  background: var(--aksan);
+  color: var(--aksan-koyu);
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: filter 150ms ease-out;
+}
+
+.onayButonlari button:hover {
+  filter: brightness(1.1);
+}
+
+.durdurButonu {
+  background: transparent !important;
+  color: var(--tehlike) !important;
+  border: 1px solid color-mix(in srgb, var(--tehlike) 50%, transparent) !important;
+}
+
 /* --- Canlı log --- */
 
 .log {

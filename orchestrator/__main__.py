@@ -56,8 +56,13 @@ def main() -> int:
         for alt in pstate.alt_gorevler:
             isaret = {"basarili": "[x]", "basarisiz": "[!]"}.get(alt["durum"], "[ ]")
             print(f"  {isaret} {alt['id']}. {alt['gorev']}")
+        print(f"Entegrasyon doğrulaması: {pstate.entegrasyon or '(yapılmadı)'}")
         print("=" * 60)
-        return 0 if all(a["durum"] == "basarili" for a in pstate.alt_gorevler) else 1
+        tamam = (
+            all(a["durum"] == "basarili" for a in pstate.alt_gorevler)
+            and pstate.entegrasyon == "basarili"
+        )
+        return 0 if tamam else 1
 
     state = orkestrator.gorev_calistir(args.gorev, devam=args.devam)
 

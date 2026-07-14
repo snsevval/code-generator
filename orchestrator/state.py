@@ -21,6 +21,8 @@ class ProjeState:
 
     hedef: str
     alt_gorevler: list[dict] = field(default_factory=list)
+    # Final entegrasyon doğrulaması: "" (yapılmadı) | "basarili" | "basarisiz"
+    entegrasyon: str = ""
 
     def kaydet(self, yol: Path) -> None:
         yol.parent.mkdir(parents=True, exist_ok=True)

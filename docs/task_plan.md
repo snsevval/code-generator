@@ -112,8 +112,10 @@ rol kısıtları) ve yeterli kota.
       hedefi 4 alt göreve bölündü, 4/4 tamamlandı — notlar.py + notdefteri.py +
       17 pytest testi (hepsi geçiyor, CLI elle doğrulandı). Kesinti sonrası --devam,
       netleştirme turu ve validator yazma engeli canlıda çalıştı.
-- [ ] Entegrasyon doğrulaması: tüm alt görevler bitince final Validator turu
-- [x] UI: alt görev listesi görünümü (proje modu anahtarı + durum ikonlu liste);
-      insan onay noktası (devam/düzelt) hâlâ açık
-- [ ] Sertleştirme notu: validator run_shell üzerinden dosya silebiliyor (`del notlar.json`
-      görüldü) — yazma kısıtının kabuk yan-kanalı da düşünülmeli
+- [x] Entegrasyon doğrulaması: tüm alt görevler bitince validator, parçaların BİRLİKTE
+      çalıştığını sınıyor (`ProjeState.entegrasyon`; CLI çıkış kodu ve UI buna bakıyor)
+- [x] UI: alt görev listesi görünümü + insan onay noktası — "Adım adım onay" seçeneğiyle
+      her alt görevden sonra Devam/Durdur kararı (POST /api/onay; 1 saat zaman aşımında
+      güvenli tarafta durur)
+- [x] Sertleştirme: dosya değiştiremeyen roller (validator) artık kabuk üzerinden de
+      silme/taşıma/yönlendirme (`del`, `rm`, `move`, `>` vb.) yapamıyor

@@ -11,6 +11,7 @@ diske yazılır (kesinti sonrası devam için).
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 from orchestrator.agents import (
@@ -27,6 +28,13 @@ MAX_TOOL_TURU = 25  # bir ajanın tek görevde yapabileceği en fazla tool turu
 MAX_DEBUG_TURU = 3  # doğrulama başarısız kaldıkça en fazla kaç debugger turu
 # Token tasarrufu: en son tur hariç, geçmişteki araç çıktıları bu uzunluğa kırpılır
 ESKI_ARAC_CIKTISI_KIRPMA = 400
+
+# Dosya değiştiremeyen roller için kabuk yan-kanalı: silme/taşıma komutları ve
+# yönlendirme ile dosya yazma da yasak (canlıda validator 'del notlar.json' koştu)
+_YIKICI_KABUK = re.compile(
+    r"(^|[\s&|;(])(del|erase|rd|rmdir|rm|move|mv|ren|rename|copy|cp)\b|>{1,2}",
+    re.IGNORECASE,
+)
 
 
 class OrkestrasyonHatasi(RuntimeError):
@@ -124,6 +132,17 @@ class Orkestrator:
                         f"({girdi.get('path')!r}). Düzeltme Debugger'ın işi; sen yalnızca "
                         "doğrula ve sonucu raporla.",
                     )
+                elif (
+                    blok["name"] == "run_shell"
+                    and ajan.mevcut_dosyayi_degistiremez
+                    and _YIKICI_KABUK.search(girdi.get("command", ""))
+                ):
+                    sonuc = ToolSonucu(
+                        False,
+                        f"HATA: {ajan.ad} rolü kabuk üzerinden dosya silemez, taşıyamaz "
+                        "veya yönlendirmeyle (>) yazamaz. Yalnızca test/doğrulama "
+                        "komutları çalıştır (örn. pytest, python <script>).",
+                    )
                 else:
                     sonuc = self.executor.calistir(blok["name"], girdi)
                 sonuc_bloklari.append(
@@ -168,7 +187,7 @@ class Orkestrator:
             "işareti yok; çıktı:\n" + cikti[-500:]
         )
 
-    def _dogrulamayi_coz(self, dogrulama: str) -> bool:
+    def dogrulamayi_coz(self, dogrulama: str) -> bool:
         """Doğrulama çıktısını yorumlar; işaret unutulmuşsa bir kez netleştirir.
 
         Modeller işaret satırını arada unutuyor (canlıda görüldü); işi baştan
@@ -210,7 +229,7 @@ class Orkestrator:
         )
 
         # Başarısızsa debugger ↔ validator döngüsü
-        gecti = self._dogrulamayi_coz(dogrulama)
+        gecti = self.dogrulamayi_coz(dogrulama)
         while not gecti:
             if state.debug_turu >= MAX_DEBUG_TURU:
                 self._yaz(f"[orkestratör] {MAX_DEBUG_TURU} debug turu tükendi, bırakılıyor.")
@@ -231,7 +250,7 @@ class Orkestrator:
                 "validator",
                 f"Görev: {gorev}\n\nPlan:\n{plan}\n\nDüzeltme sonrası işi yeniden doğrula.",
             )
-            gecti = self._dogrulamayi_coz(dogrulama)
+            gecti = self.dogrulamayi_coz(dogrulama)
 
         state.ciktilar["dogrulama_gecti"] = str(gecti)
         self._asama(

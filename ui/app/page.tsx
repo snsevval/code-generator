@@ -16,6 +16,7 @@ type Sonuc = {
   reviewer?: string;
   plan?: string;
   alt_gorevler?: AltGorev[];
+  entegrasyon?: string;
 };
 
 type Durum = {
@@ -24,6 +25,7 @@ type Durum = {
   log: string[];
   hata: string | null;
   sonuc: Sonuc | null;
+  onay_bekleyen: { id: number; gorev: string } | null;
 };
 
 type Saglik = { api: boolean; proxy: boolean };
@@ -90,6 +92,7 @@ export default function Anasayfa() {
   const [model, setModel] = useState("");
   const [docker, setDocker] = useState(false);
   const [proje, setProje] = useState(false);
+  const [onayli, setOnayli] = useState(false);
   const [durum, setDurum] = useState<Durum | null>(null);
   const [gonderimHatasi, setGonderimHatasi] = useState<string | null>(null);
   const [saglik, setSaglik] = useState<Saglik | null>(null);
@@ -129,6 +132,19 @@ export default function Anasayfa() {
     logSonu.current?.scrollIntoView({ behavior: "smooth" });
   }, [durum?.log.length]);
 
+  async function onayGonder(devam: boolean) {
+    try {
+      await fetch(`${API}/api/onay`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ devam }),
+      });
+      await durumuGetir();
+    } catch {
+      // durum yoklaması zaten sürüyor; geçici hata yut
+    }
+  }
+
   async function gorevBaslat(e: React.FormEvent) {
     e.preventDefault();
     setGonderimHatasi(null);
@@ -136,7 +152,7 @@ export default function Anasayfa() {
       const y = await fetch(`${API}/api/gorev`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ gorev, model: model || null, docker, proje }),
+        body: JSON.stringify({ gorev, model: model || null, docker, proje, onayli: proje && onayli }),
       });
       if (!y.ok) {
         const veri = await y.json().catch(() => null);
@@ -191,6 +207,12 @@ export default function Anasayfa() {
             <input type="checkbox" checked={proje} onChange={(e) => setProje(e.target.checked)} />
             Proje modu
           </label>
+          {proje && (
+            <label className={styles.onayKutusu}>
+              <input type="checkbox" checked={onayli} onChange={(e) => setOnayli(e.target.checked)} />
+              Adım adım onay
+            </label>
+          )}
           <label className={styles.onayKutusu}>
             <input type="checkbox" checked={docker} onChange={(e) => setDocker(e.target.checked)} />
             Docker sandbox
@@ -227,6 +249,23 @@ export default function Anasayfa() {
             </ul>
           )}
 
+          {durum.onay_bekleyen && (
+            <div className={styles.onayPaneli} role="alertdialog" aria-label="Onay bekleniyor">
+              <p>
+                <strong>Alt görev {durum.onay_bekleyen.id} tamamlandı.</strong>{" "}
+                {durum.onay_bekleyen.gorev}
+              </p>
+              <div className={styles.onayButonlari}>
+                <button type="button" onClick={() => onayGonder(true)}>
+                  Devam et
+                </button>
+                <button type="button" className={styles.durdurButonu} onClick={() => onayGonder(false)}>
+                  Durdur
+                </button>
+              </div>
+            </div>
+          )}
+
           <div className={styles.log} aria-live="polite">
             {durum.log.map((satir, i) => (
               <div key={i} className={satirSinifi(satir)}>
@@ -251,6 +290,9 @@ export default function Anasayfa() {
                   {durum.sonuc.dogrulama_gecti ? "DOĞRULAMA GEÇTİ" : "DOĞRULAMA KALDI"}
                 </strong>
                 {!durum.sonuc.proje && <span> · Debug turu: {durum.sonuc.debug_turu}</span>}
+                {durum.sonuc.proje && durum.sonuc.entegrasyon && (
+                  <span> · Entegrasyon: {durum.sonuc.entegrasyon}</span>
+                )}
               </p>
               {durum.sonuc.plan && (
                 <details>
