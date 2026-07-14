@@ -168,6 +168,25 @@ class Orkestrator:
             "işareti yok; çıktı:\n" + cikti[-500:]
         )
 
+    def _dogrulamayi_coz(self, dogrulama: str) -> bool:
+        """Doğrulama çıktısını yorumlar; işaret unutulmuşsa bir kez netleştirir.
+
+        Modeller işaret satırını arada unutuyor (canlıda görüldü); işi baştan
+        koşturmak yerine ucuz bir ek soruyla nihai sonucu isteriz.
+        """
+        try:
+            return self._dogrulama_gecti(dogrulama)
+        except OrkestrasyonHatasi:
+            self._yaz("[orkestratör] validator işaret koymadı → netleştirme isteniyor")
+            netlestirme = self.ajan_calistir(
+                AJANLAR["validator"],
+                "Az önce şu doğrulama çıktısını verdin:\n---\n"
+                + dogrulama[-1500:]
+                + "\n---\nBu doğrulamanın nihai sonucunu TEK satırla bildir: "
+                f"'{BASARI_ISARETI}' ya da '{BASARISIZLIK_ISARETI}'. Başka bir şey yazma.",
+            )
+            return self._dogrulama_gecti(netlestirme)
+
     # --- Ana akış ---
 
     def gorev_calistir(self, gorev: str, devam: bool = False) -> OturumState:
@@ -191,7 +210,8 @@ class Orkestrator:
         )
 
         # Başarısızsa debugger ↔ validator döngüsü
-        while not self._dogrulama_gecti(dogrulama):
+        gecti = self._dogrulamayi_coz(dogrulama)
+        while not gecti:
             if state.debug_turu >= MAX_DEBUG_TURU:
                 self._yaz(f"[orkestratör] {MAX_DEBUG_TURU} debug turu tükendi, bırakılıyor.")
                 break
@@ -211,8 +231,9 @@ class Orkestrator:
                 "validator",
                 f"Görev: {gorev}\n\nPlan:\n{plan}\n\nDüzeltme sonrası işi yeniden doğrula.",
             )
+            gecti = self._dogrulamayi_coz(dogrulama)
 
-        state.ciktilar["dogrulama_gecti"] = str(self._dogrulama_gecti(dogrulama))
+        state.ciktilar["dogrulama_gecti"] = str(gecti)
         self._asama(
             state,
             "reviewer",

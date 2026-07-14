@@ -202,11 +202,30 @@ def test_debug_turu_siniri(tmp_path):
     assert "reviewer" in state.ciktilar
 
 
-def test_isaretsiz_validator_ciktisi_hata(tmp_path):
+def test_isaretsiz_validator_netlestirmeyle_cozulur(tmp_path):
     senaryo = [
         metin_cevap("plan"),
         metin_cevap("kod"),
-        metin_cevap("bir şeyler oldu ama işaret koymadım"),
+        metin_cevap("her şey yolunda ama işaret koymayı unuttum"),  # validator
+        metin_cevap(BASARI_ISARETI),  # netleştirme cevabı
+        metin_cevap("rapor"),  # reviewer
+    ]
+    ork, istemci = orkestrator_kur(tmp_path, senaryo)
+    state = ork.gorev_calistir("görev")
+
+    assert state.ciktilar["dogrulama_gecti"] == "True"
+    assert state.debug_turu == 0
+    # Netleştirme isteği validator rolüne gitmiş olmalı
+    assert "VALIDATOR" in istemci.istekler[3]["system"]
+    assert "TEK satırla" in istemci.istekler[3]["messages"][0]["content"]
+
+
+def test_netlestirme_de_isaretsizse_hata(tmp_path):
+    senaryo = [
+        metin_cevap("plan"),
+        metin_cevap("kod"),
+        metin_cevap("işaret yok"),
+        metin_cevap("yine işaret koymuyorum"),  # netleştirme de işaretsiz
     ]
     ork, _ = orkestrator_kur(tmp_path, senaryo)
     with pytest.raises(OrkestrasyonHatasi, match="işareti yok"):
