@@ -23,6 +23,7 @@ from pydantic import BaseModel
 
 from orchestrator.llm_client import VARSAYILAN_PROXY_URL
 from orchestrator.loop import Orkestrator
+from orchestrator.proje import ProjeOrkestratoru
 from orchestrator.tool_executor import DockerShellRunner, ToolExecutor
 
 app = FastAPI(title="code-generator API")
@@ -39,6 +40,7 @@ class GorevIstegi(BaseModel):
     model: str | None = None  # örn. "groq/llama-3.3-70b-versatile"; boşsa varsayılan
     docker: bool = False
     devam: bool = False
+    proje: bool = False  # True: hedef alt görevlere bölünüp zincir halinde koşulur
 
 
 class _Durum:
@@ -64,18 +66,30 @@ def _gorev_kos(istek: GorevIstegi) -> None:
         ws = Path(os.environ.get("FCC_WORKSPACE", "workspace")).resolve()
         ws.mkdir(parents=True, exist_ok=True)
         runner = DockerShellRunner(ws) if istek.docker else None
-        ork = ORKESTRATOR_FABRIKASI(
-            ws,
-            ToolExecutor(ws, shell_runner=runner),
-            lambda satir: DURUM.log.append(satir),
-        )
-        state = ork.gorev_calistir(istek.gorev, devam=istek.devam)
-        DURUM.sonuc = {
-            "dogrulama_gecti": state.ciktilar.get("dogrulama_gecti") == "True",
-            "debug_turu": state.debug_turu,
-            "reviewer": state.ciktilar.get("reviewer", ""),
-            "plan": state.ciktilar.get("planner", ""),
-        }
+        log = lambda satir: DURUM.log.append(satir)  # noqa: E731
+        ork = ORKESTRATOR_FABRIKASI(ws, ToolExecutor(ws, shell_runner=runner), log)
+        if istek.proje:
+            proje = ProjeOrkestratoru(ws, orkestrator=ork, log=log)
+            pstate = proje.hedef_calistir(istek.gorev, devam=istek.devam)
+            DURUM.sonuc = {
+                "proje": True,
+                "alt_gorevler": [
+                    {"id": a["id"], "gorev": a["gorev"], "durum": a["durum"]}
+                    for a in pstate.alt_gorevler
+                ],
+                "dogrulama_gecti": all(
+                    a["durum"] == "basarili" for a in pstate.alt_gorevler
+                ),
+            }
+        else:
+            state = ork.gorev_calistir(istek.gorev, devam=istek.devam)
+            DURUM.sonuc = {
+                "proje": False,
+                "dogrulama_gecti": state.ciktilar.get("dogrulama_gecti") == "True",
+                "debug_turu": state.debug_turu,
+                "reviewer": state.ciktilar.get("reviewer", ""),
+                "plan": state.ciktilar.get("planner", ""),
+            }
     except Exception as e:  # UI'ye okunur hata taşınır
         DURUM.hata = f"{type(e).__name__}: {e}"
     finally:

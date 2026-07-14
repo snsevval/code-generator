@@ -103,3 +103,34 @@ def test_saglik_endpointi(istemci):
     veri = istemci.get("/api/saglik").json()
     assert veri["api"] is True
     assert isinstance(veri["proxy"], bool)
+
+
+def test_proje_modu_alt_gorevleri_doner(istemci, monkeypatch):
+    from orchestrator.state import ProjeState
+
+    class SahteProje:
+        def __init__(self, ws, orkestrator=None, log=None):
+            self._log = log
+
+        def hedef_calistir(self, hedef, devam=False):
+            self._log("[decomposer] hedef alt görevlere bölünüyor...")
+            return ProjeState(
+                hedef=hedef,
+                alt_gorevler=[
+                    {"id": 1, "gorev": "a", "kabul": "", "durum": "basarili", "ozet": ""},
+                    {"id": 2, "gorev": "b", "kabul": "", "durum": "basarisiz", "ozet": ""},
+                ],
+            )
+
+    monkeypatch.setattr(api, "ORKESTRATOR_FABRIKASI", lambda ws, ex, log: object())
+    monkeypatch.setattr(api, "ProjeOrkestratoru", SahteProje)
+
+    yanit = istemci.post("/api/gorev", json={"gorev": "büyük hedef", "proje": True})
+    assert yanit.status_code == 200
+
+    veri = _bekle_bitsin(istemci)
+    assert veri["hata"] is None
+    assert veri["sonuc"]["proje"] is True
+    assert veri["sonuc"]["dogrulama_gecti"] is False  # biri başarısız
+    assert [a["durum"] for a in veri["sonuc"]["alt_gorevler"]] == ["basarili", "basarisiz"]
+    assert "[decomposer] hedef alt görevlere bölünüyor..." in veri["log"]

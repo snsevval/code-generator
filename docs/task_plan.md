@@ -84,9 +84,13 @@ Orkestratörün yönettiği çok-ajanlı üretim döngüsü.
       GET /api/durum canlı log yoklama, GET /api/saglik; 5 test)
 - [x] Next.js UI (`ui/`: görev formu, model seçimi, Docker anahtarı, ajan renkli canlı
       log akışı, doğrulama sonucu + plan + reviewer raporu; koyu tema)
-- [ ] ui-ux-pro-max design tool entegrasyonu
-- [ ] Embedding tabanlı repo indexleme (bağlam seçimi için)
-- [ ] UI üzerinden uçtan uca gerçek görev (kota sıfırlanınca; CLI'daki temiz tam turla birlikte)
+- [x] ui-ux-pro-max design tool entegrasyonu — tasarım sistemi üretildi (OLED koyu tema,
+      slate paleti, Fira Code/Sans, yoğun panel düzeni) ve arayüze uygulandı; SVG ikon
+      seti, görünür odak halkaları, prefers-reduced-motion desteği
+- [x] Repo indexleme (`orchestrator/indeks.py` + `search_files` aracı): TF-IDF varsayılan
+      (kotasız), `FCC_EMBEDDING=gemini` ile embedding tabanlı
+- [x] UI üzerinden uçtan uca gerçek görev — API yoluyla canlı doğrulandı (2026-07-14,
+      dogrulama_gecti=True); UI'ye proje modu anahtarı + alt görev durum listesi eklendi
 
 ## Faz 4 — Görev Ayrıştırma: Büyük Hedef Desteği
 
@@ -109,6 +113,7 @@ rol kısıtları) ve yeterli kota.
       17 pytest testi (hepsi geçiyor, CLI elle doğrulandı). Kesinti sonrası --devam,
       netleştirme turu ve validator yazma engeli canlıda çalıştı.
 - [ ] Entegrasyon doğrulaması: tüm alt görevler bitince final Validator turu
-- [ ] UI: alt görev listesi görünümü + opsiyonel insan onay noktası (devam/düzelt)
+- [x] UI: alt görev listesi görünümü (proje modu anahtarı + durum ikonlu liste);
+      insan onay noktası (devam/düzelt) hâlâ açık
 - [ ] Sertleştirme notu: validator run_shell üzerinden dosya silebiliyor (`del notlar.json`
       görüldü) — yazma kısıtının kabuk yan-kanalı da düşünülmeli
