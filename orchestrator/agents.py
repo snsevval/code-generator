@@ -1,4 +1,4 @@
-"""Faz 2 — Ajan tanımları.
+﻿"""Faz 2 — Ajan tanımları.
 
 Beş ajan: Planner → Codegen → Test/Validator → (Debugger) → Reviewer.
 Her ajanın kendi sistem promptu, izinli araç listesi ve model rotası var.
@@ -63,7 +63,7 @@ AJANLAR: dict[str, AjanTanimi] = {
         "adımlara böl. Gerekirse mevcut dosyaları read_file ile incele. Kod yazma; "
         "yalnızca planı üret. Her adımda hangi dosyanın oluşturulacağını/değişeceğini "
         "ve kabul ölçütünü belirt.",
-        araclar=("list_files", "read_file"),
+        araclar=("list_files", "search_files", "read_file"),
     ),
     "codegen": AjanTanimi(
         ad="codegen",
@@ -72,7 +72,7 @@ AJANLAR: dict[str, AjanTanimi] = {
         "gerekirse read_file ile mevcut kodu incele, hızlı doğrulamalar için run_shell "
         "kullanabilirsin. Plandaki her adımı tamamla; bitirince hangi dosyaları "
         "yazdığını özetle.",
-        araclar=("list_files", "read_file", "write_file", "run_shell"),
+        araclar=("list_files", "search_files", "read_file", "write_file", "run_shell"),
     ),
     "validator": AjanTanimi(
         ad="validator",
@@ -84,7 +84,7 @@ AJANLAR: dict[str, AjanTanimi] = {
         "Cevabının EN SON satırı tam olarak şu ikisinden biri olmalı: "
         f"'{BASARI_ISARETI}' veya '{BASARISIZLIK_ISARETI}'. Başarısızsa üstüne hata "
         "çıktısını ve nedenini yaz.",
-        araclar=("list_files", "read_file", "write_file", "run_shell"),
+        araclar=("list_files", "search_files", "read_file", "write_file", "run_shell"),
         mevcut_dosyayi_degistiremez=True,
     ),
     "debugger": AjanTanimi(
@@ -94,7 +94,7 @@ AJANLAR: dict[str, AjanTanimi] = {
         "nedeni bul, ilgili dosyaları read_file ile incele, düzeltmeyi write_file ile "
         "uygula ve run_shell ile düzeltmenin tuttuğunu göster. Semptomu değil nedeni "
         "düzelt.",
-        araclar=("list_files", "read_file", "write_file", "run_shell"),
+        araclar=("list_files", "search_files", "read_file", "write_file", "run_shell"),
     ),
     "decomposer": AjanTanimi(
         ad="decomposer",
@@ -104,7 +104,7 @@ AJANLAR: dict[str, AjanTanimi] = {
         "Mevcut dosyaları görmek için list_files/read_file kullanabilirsin. Kod yazma. "
         "Cevabın YALNIZCA şu biçimde bir JSON dizisi olsun, başka hiçbir metin ekleme: "
         '[{"id": 1, "gorev": "...", "kabul": "kabul ölçütü ..."}, ...]',
-        araclar=("list_files", "read_file"),
+        araclar=("list_files", "search_files", "read_file"),
     ),
     "reviewer": AjanTanimi(
         ad="reviewer",
@@ -112,7 +112,7 @@ AJANLAR: dict[str, AjanTanimi] = {
         + " Rolün: REVIEWER. Üretilen kodu read_file ile incele ve kısa bir inceleme "
         "raporu yaz: doğruluk riskleri, basitleştirme fırsatları, eksik testler. "
         "Dosya değiştirme; yalnızca raporla.",
-        araclar=("list_files", "read_file"),
+        araclar=("list_files", "search_files", "read_file"),
     ),
 }
 

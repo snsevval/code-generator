@@ -93,6 +93,24 @@ TOOL_TANIMLARI = [
         },
     },
     {
+        "name": "search_files",
+        "description": (
+            "Workspace'te içeriğe göre arama yapar; sorguya en ilgili dosyaları "
+            "skorlarıyla listeler. Hangi dosyanın işinle ilgili olduğundan emin "
+            "değilsen read_file'dan önce bunu kullan."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": "Aranan kavram/işlev (örn. 'not silme fonksiyonu')",
+                }
+            },
+            "required": ["query"],
+        },
+    },
+    {
         "name": "run_shell",
         "description": (
             "Workspace kökünde bir kabuk komutu çalıştırır; çıkış kodu, "
@@ -239,6 +257,18 @@ class ToolExecutor:
             return ToolSonucu(True, "(klasör boş)")
         return ToolSonucu(True, "\n".join(satirlar))
 
+    def search_files(self, query: str) -> ToolSonucu:
+        if not query or not query.strip():
+            return ToolSonucu(False, "HATA: query boş olamaz")
+        # İçe aktarma burada: indeks modülü bu modülü kullandığı için döngüsel
+        # import'u kırmak gerekiyor
+        from orchestrator.indeks import RepoIndeksi
+
+        try:
+            return ToolSonucu(True, RepoIndeksi(self.workspace).sorgula_metin(query))
+        except Exception as e:  # örn. embedding arka ucu yapılandırma/ağ hatası
+            return ToolSonucu(False, f"HATA: arama başarısız: {e}")
+
     def read_file(self, path: str) -> ToolSonucu:
         try:
             tam = self._coz(path)
@@ -315,6 +345,8 @@ class ToolExecutor:
         """Araç adını ve girdisini alıp ilgili aracı çağırır (ajan döngüsü girişi)."""
         if ad == "list_files":
             return self.list_files(girdi.get("path") or ".")
+        if ad == "search_files":
+            return self.search_files(girdi.get("query", ""))
         if ad == "read_file":
             return self.read_file(girdi.get("path", ""))
         if ad == "write_file":

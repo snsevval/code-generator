@@ -86,7 +86,8 @@ def test_ajan_izinsiz_araci_alamaz(tmp_path):
     ork.ajan_calistir(AJANLAR["planner"], "planla")
 
     gonderilen_araclar = {t["name"] for t in istemci.istekler[0]["tools"]}
-    assert gonderilen_araclar == {"list_files", "read_file"}  # planner yalnızca okuyabilir
+    # planner yalnızca okuma/arama yapabilir
+    assert gonderilen_araclar == {"list_files", "search_files", "read_file"}
 
 
 def test_validator_mevcut_dosyayi_degistiremez(tmp_path):
