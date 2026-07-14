@@ -28,9 +28,9 @@ uyup uymadığını ölçmeden ileri fazlara geçilmez.
 
 - **Gemini 2.5 Flash: 10/10 geçerli tool_use.** İstekte model `gemini/gemini-2.5-flash`
   biçiminde verilince proxy doğrudan Gemini'ye yönlendiriyor (provider/model söz dizimi).
-- **NVIDIA NIM kullanılamıyor:** build.nvidia.com kayıtta TR telefon numarası doğrulamıyor;
-  anahtar alınamadı. Proxy'nin varsayılan `MODEL` rotası hâlâ NIM'i gösterdiği için istekte
-  model her zaman açıkça belirtilmeli (veya admin panelden MODEL, gemini rotasına çevrilmeli).
+- ~~NVIDIA NIM kullanılamıyor~~ **Güncelleme (2026-07-14):** kullanıcı `nvapi-` anahtarı
+  alabildi. Nemotron-3-Super tool-use testi **10/10**; varsayılan `MODEL` rotası artık
+  çalışıyor ve NIM, geniş kotasıyla birincil sağlayıcı. Gemini/Groq yedek.
 - **OpenRouter ücretsiz katman bu iş için uygun değil:** kredisiz hesapta günde ~50 istek;
   test sırasında kota tükendi (kalıcı 429). Agentic döngü için ancak kredi yüklenirse anlamlı.
 - Test scripti `FCC_TEST_MODEL`, `FCC_TEST_REPEAT`, `FCC_TEST_DELAY` ve `ANTHROPIC_AUTH_TOKEN`
@@ -61,9 +61,9 @@ Orkestratörün yönettiği çok-ajanlı üretim döngüsü.
 - [x] Model routing (ajan başına `FCC_MODEL_<AJAN>`, genel `FCC_MODEL`; varsayılan
       gemini/gemini-2.5-flash)
 - [x] Orkestratör birim testleri (11 test, sahte LLM istemcisiyle ağsız)
-- [ ] Uçtan uca döngü testi (örnek görev: küçük bir CLI aracı üretimi) — mekanizma canlıda
-      doğrulandı (tüm ajanlar + debugger döngüsü işledi) ama iki koşu da sağlayıcı günlük
-      kotasına takıldı; temiz bir tam tur, kota sıfırlanınca koşulacak
+- [x] Uçtan uca döngü testi — **temiz tam tur başarılı (2026-07-14, NIM Nemotron):**
+      doğrulama ilk denemede geçti (0 debug turu), validator dosyalara dokunmadı,
+      6/6 pytest + elle doğrulama; reviewer isabetli eksik-test önerileri raporladı
 
 ### Faz 2 iyileştirme listesi (2026-07-08 canlı koşu bulguları)
 
