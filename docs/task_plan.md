@@ -104,5 +104,11 @@ rol kısıtları) ve yeterli kota.
 - [x] Bağlam taşıma: biten alt görevin codegen özeti (500 karakter) + güncel dosya
       listesi sonraki alt görevin girdisine eklenir
 - [x] CLI: `uv run python -m orchestrator --proje "büyük hedef"`
+- [x] **İlk gerçek --proje koşusu başarılı (2026-07-14, NIM):** "not defteri uygulaması"
+      hedefi 4 alt göreve bölündü, 4/4 tamamlandı — notlar.py + notdefteri.py +
+      17 pytest testi (hepsi geçiyor, CLI elle doğrulandı). Kesinti sonrası --devam,
+      netleştirme turu ve validator yazma engeli canlıda çalıştı.
 - [ ] Entegrasyon doğrulaması: tüm alt görevler bitince final Validator turu
 - [ ] UI: alt görev listesi görünümü + opsiyonel insan onay noktası (devam/düzelt)
+- [ ] Sertleştirme notu: validator run_shell üzerinden dosya silebiliyor (`del notlar.json`
+      görüldü) — yazma kısıtının kabuk yan-kanalı da düşünülmeli
