@@ -551,7 +551,7 @@ export default function Anasayfa() {
                       {/\.html?$/i.test(d.ad) && (
                         <a
                           className={styles.indirDugmesi}
-                          href={`${API}/api/onizle?ad=${encodeURIComponent(d.ad)}`}
+                          href={`${API}/onizle/${d.ad.split("/").map(encodeURIComponent).join("/")}`}
                           target="_blank"
                           rel="noopener noreferrer"
                           title={`${d.ad} sayfasını canlı önizle`}

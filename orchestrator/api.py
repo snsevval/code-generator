@@ -16,10 +16,12 @@ import os
 import threading
 from pathlib import Path
 
+import mimetypes
+
 import httpx
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse
+from fastapi.responses import FileResponse, PlainTextResponse
 from pydantic import BaseModel
 
 from orchestrator.calisma_alani import gorev_klasoru_sec
@@ -232,22 +234,22 @@ def dosya(ad: str, indir: bool = False):
     return PlainTextResponse(hedef.read_text(encoding="utf-8", errors="replace"))
 
 
-@app.get("/api/onizle", response_class=HTMLResponse)
-def onizle(ad: str):
-    """HTML dosyasını tarayıcının render etmesi için text/html olarak sunar.
+@app.get("/onizle/{dosya_yolu:path}")
+def onizle(dosya_yolu: str):
+    """Görev klasörünü statik site gibi sunar (canlı önizleme).
 
-    Böylece UI'deki 'Önizle' düğmesi sayfayı canlı açar (CSS/JS dahil çalışır).
+    HTML doğru content-type ile döndürülür; içindeki göreli style.css/script.js
+    de bu kökten (/onizle/...) çözülür, böylece çok dosyalı site TAM çalışır.
     Yalnızca aktif görev klasörünün içi sunulur (path traversal koruması).
     """
     if DURUM.klasor_yolu is None:
         raise HTTPException(404, "aktif bir görev klasörü yok")
     kok = DURUM.klasor_yolu.resolve()
-    hedef = (kok / ad).resolve()
+    hedef = (kok / dosya_yolu).resolve()
     if not hedef.is_relative_to(kok) or not hedef.is_file():
         raise HTTPException(404, "dosya bulunamadı")
-    if hedef.suffix.lower() not in (".html", ".htm"):
-        raise HTTPException(400, "yalnızca HTML dosyaları önizlenebilir")
-    return HTMLResponse(hedef.read_text(encoding="utf-8", errors="replace"))
+    tur, _ = mimetypes.guess_type(str(hedef))
+    return FileResponse(hedef, media_type=tur or "text/plain")
 
 
 @app.get("/api/saglik")

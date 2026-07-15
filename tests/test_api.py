@@ -160,21 +160,33 @@ def test_dosya_klasor_yokken_404(istemci):
     assert istemci.get("/api/dosyalar").json() == {"dosyalar": []}
 
 
-def test_onizle_html_sunar(istemci, tmp_path):
-    (tmp_path / "sayfa.html").write_text("<h1>Merhaba</h1>", encoding="utf-8")
-    (tmp_path / "veri.py").write_text("x = 1", encoding="utf-8")
+def test_onizle_cok_dosyali_site_sunar(istemci, tmp_path):
+    (tmp_path / "index.html").write_text(
+        '<link rel="stylesheet" href="style.css"><h1>Merhaba</h1>'
+        '<script src="script.js"></script>',
+        encoding="utf-8",
+    )
+    (tmp_path / "style.css").write_text("body { background: #000; }", encoding="utf-8")
+    (tmp_path / "script.js").write_text("console.log('ok')", encoding="utf-8")
     api.DURUM.klasor_yolu = tmp_path
 
-    onizleme = istemci.get("/api/onizle", params={"ad": "sayfa.html"})
-    assert onizleme.status_code == 200
-    assert "text/html" in onizleme.headers["content-type"]
-    assert "<h1>Merhaba</h1>" in onizleme.text
+    # HTML doğru content-type ile
+    html = istemci.get("/onizle/index.html")
+    assert html.status_code == 200
+    assert "text/html" in html.headers["content-type"]
+    assert "<h1>Merhaba</h1>" in html.text
 
-    # HTML olmayan dosya önizlenemez
-    assert istemci.get("/api/onizle", params={"ad": "veri.py"}).status_code == 400
+    # Göreli varlıklar da aynı kökten sunulur (asıl düzeltme)
+    css = istemci.get("/onizle/style.css")
+    assert css.status_code == 200
+    assert "text/css" in css.headers["content-type"]
+    js = istemci.get("/onizle/script.js")
+    assert js.status_code == 200
+    assert "javascript" in js.headers["content-type"]
+
     # Path traversal
-    (tmp_path.parent / "gizli.html").write_text("sır", encoding="utf-8")
-    assert istemci.get("/api/onizle", params={"ad": "../gizli.html"}).status_code == 404
+    (tmp_path.parent / "gizli.txt").write_text("sır", encoding="utf-8")
+    assert istemci.get("/onizle/../gizli.txt").status_code in (403, 404)
 
 
 def test_saglik_endpointi(istemci):
