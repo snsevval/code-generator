@@ -144,3 +144,22 @@ rol kısıtları) ve yeterli kota.
 - [ ] Görev kuyruğu (API'de aynı anda tek görev sınırının ötesi)
 - [ ] Docker sandbox'ı varsayılan yapmak
 - [ ] Güçlü/ücretli model karşılaştırması
+
+## Faz 7 — UI Yapabilme Yeteneği (2026-07-15)
+
+Sistem HTML'i artık kör yazmıyor: sayfayı açan bir gözü ve uyacağı bir tasarım
+sistemi var. Karma model: ajanlar NIM'de, yalnızca görüntü analizi Gemini'ye gider.
+
+- [x] **check_page aracı** (`tool_executor.py` + Playwright/Chromium): sayfayı headless
+      açar; başlık, konsol hataları/pageerror, tam sayfa screenshot (`.kontrol/`)
+- [x] **Görsel analiz** (`orchestrator/gorsel.py`): screenshot doğrudan Gemini REST'e
+      gider (proxy'den bağımsız), kısa Türkçe UI raporu araç çıktısına eklenir;
+      anahtar yoksa zarif bozulma. Canlı sondada gömülü iki kusuru (kontrast + taşma)
+      yakaladı.
+- [x] **Tasarım bilgisi** (`orchestrator/tasarim.py`): ui-ux-pro-max search.py subprocess
+      ile koşulur, tasarım sistemi görev metnine enjekte edilir (`tasarim` bayrağı /
+      CLI `--tasarim` / UI'de "UI görevi" anahtarı)
+- [x] Uçtan uca doğrulandı: portfolyo görevi NIM'de koştu; Codegen+Validator check_page
+      kullandı, doğrulama geçti, üretilen sayfa tasarım sistemli (koyu tema + tutarlı
+      aksan) — 13 yeni test (toplam 120)
+- [ ] 2. dalga: React/Next üretimi (uzun komut + arka plan sunucu araçları)

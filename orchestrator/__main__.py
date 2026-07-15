@@ -41,7 +41,23 @@ def main() -> int:
         action="store_true",
         help="Büyük hedef modu: hedefi alt görevlere bölüp zincir halinde koşar",
     )
+    parser.add_argument(
+        "--tasarim",
+        action="store_true",
+        help="UI görevi: ui-ux-pro-max tasarım sistemi görev bağlamına eklenir",
+    )
     args = parser.parse_args()
+
+    gorev = args.gorev
+    if args.tasarim:
+        from orchestrator.tasarim import gorevi_zenginlestir
+
+        gorev = gorevi_zenginlestir(gorev)
+        print(
+            "Tasarım sistemi göreve eklendi."
+            if gorev != args.gorev
+            else "Tasarım scripti bulunamadı; görev değişmeden sürüyor."
+        )
 
     # Görev başına izole klasör (--workspace kök sayılır; --devam sonuncuyu sürdürür)
     workspace = gorev_klasoru_sec(Path(args.workspace), devam=args.devam, proje=args.proje)
@@ -60,7 +76,7 @@ def main() -> int:
 
     if args.proje:
         proje = ProjeOrkestratoru(workspace, orkestrator=orkestrator)
-        pstate = proje.hedef_calistir(args.gorev, devam=args.devam)
+        pstate = proje.hedef_calistir(gorev, devam=args.devam)
         print("\n" + "=" * 60)
         print(f"HEDEF: {pstate.hedef}")
         for alt in pstate.alt_gorevler:
@@ -75,7 +91,7 @@ def main() -> int:
         )
         return 0 if tamam else 1
 
-    state = orkestrator.gorev_calistir(args.gorev, devam=args.devam)
+    state = orkestrator.gorev_calistir(gorev, devam=args.devam)
 
     print("\n" + "=" * 60)
     print(f"GÖREV: {state.gorev}")

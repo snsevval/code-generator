@@ -130,6 +130,7 @@ export default function Anasayfa() {
   const [docker, setDocker] = useState(false);
   const [proje, setProje] = useState(false);
   const [onayli, setOnayli] = useState(false);
+  const [tasarim, setTasarim] = useState(false);
   const [durum, setDurum] = useState<Durum | null>(null);
   const [gonderimHatasi, setGonderimHatasi] = useState<string | null>(null);
   const [saglik, setSaglik] = useState<Saglik | null>(null);
@@ -204,7 +205,14 @@ export default function Anasayfa() {
       const y = await fetch(`${API}/api/gorev`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ gorev, model: model || null, docker, proje, onayli: proje && onayli }),
+        body: JSON.stringify({
+          gorev,
+          model: model || null,
+          docker,
+          proje,
+          onayli: proje && onayli,
+          tasarim,
+        }),
       });
       if (!y.ok) {
         const veri = await y.json().catch(() => null);
@@ -294,6 +302,13 @@ export default function Anasayfa() {
                   Adım adım onay
                 </label>
               )}
+              <label
+                className={`${styles.anahtar} ${tasarim ? styles.anahtarAcik : ""}`}
+                title="ui-ux-pro-max tasarım sistemi göreve eklenir; HTML çıktıları tarayıcıda açılıp görsel olarak analiz edilir"
+              >
+                <input type="checkbox" checked={tasarim} onChange={(e) => setTasarim(e.target.checked)} />
+                UI görevi
+              </label>
               <label className={`${styles.anahtar} ${docker ? styles.anahtarAcik : ""}`}>
                 <input type="checkbox" checked={docker} onChange={(e) => setDocker(e.target.checked)} />
                 Docker sandbox

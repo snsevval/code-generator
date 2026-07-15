@@ -104,6 +104,27 @@ def test_durum_kullanim_alani_icerir(istemci):
     assert "kullanim" in veri  # koşu yokken None olabilir
 
 
+def test_tasarim_bayragi_gorevi_zenginlestirir(istemci, monkeypatch):
+    alinan = {}
+
+    class KaydediciOrk(SahteOrkestrator):
+        def gorev_calistir(self, gorev, devam=False):
+            alinan["gorev"] = gorev
+            return super().gorev_calistir(gorev, devam)
+
+    monkeypatch.setattr(
+        api, "ORKESTRATOR_FABRIKASI", lambda ws, ex, log: KaydediciOrk(log)
+    )
+    monkeypatch.setattr(api, "TASARIM_ZENGINLESTIRICI", lambda g: g + "\n\nUyulacak tasarım sistemi:\n- mor")
+
+    istemci.post("/api/gorev", json={"gorev": "sayfa yap", "tasarim": True})
+    veri = _bekle_bitsin(istemci)
+
+    assert veri["hata"] is None
+    assert "Uyulacak tasarım sistemi" in alinan["gorev"]
+    assert any("[tasarım]" in s for s in veri["log"])
+
+
 def test_dosyalar_listeler_ve_indirir(istemci, tmp_path):
     (tmp_path / "arac.py").write_text("print('selam')", encoding="utf-8")
     (tmp_path / "alt").mkdir()

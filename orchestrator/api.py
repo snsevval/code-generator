@@ -26,6 +26,7 @@ from orchestrator.calisma_alani import gorev_klasoru_sec
 from orchestrator.llm_client import VARSAYILAN_PROXY_URL
 from orchestrator.loop import Orkestrator
 from orchestrator.proje import ProjeOrkestratoru
+from orchestrator.tasarim import gorevi_zenginlestir
 from orchestrator.tool_executor import (
     GIZLENEN_KLASORLER,
     DockerShellRunner,
@@ -48,6 +49,7 @@ class GorevIstegi(BaseModel):
     devam: bool = False
     proje: bool = False  # True: hedef alt görevlere bölünüp zincir halinde koşulur
     onayli: bool = False  # True: her alt görevden sonra kullanıcı onayı beklenir
+    tasarim: bool = False  # True: göreve ui-ux-pro-max tasarım sistemi enjekte edilir
 
 
 class OnayKarari(BaseModel):
@@ -95,10 +97,20 @@ def _gorev_kos(istek: GorevIstegi) -> None:
         log = lambda satir: DURUM.log.append(satir)  # noqa: E731
         ork = ORKESTRATOR_FABRIKASI(ws, ToolExecutor(ws, shell_runner=runner), log)
         DURUM.istemci = getattr(ork, "istemci", None)
+
+        gorev_metni = istek.gorev
+        if istek.tasarim:
+            log("[tasarım] ui-ux-pro-max tasarım sistemi üretiliyor...")
+            gorev_metni = TASARIM_ZENGINLESTIRICI(gorev_metni)
+            log(
+                "[tasarım] tasarım sistemi göreve eklendi."
+                if gorev_metni != istek.gorev
+                else "[tasarım] tasarım scripti bulunamadı, görev değişmeden sürüyor."
+            )
         if istek.proje:
             onay = _onay_bekle if istek.onayli else None
             proje = ProjeOrkestratoru(ws, orkestrator=ork, log=log, onay_callback=onay)
-            pstate = proje.hedef_calistir(istek.gorev, devam=istek.devam)
+            pstate = proje.hedef_calistir(gorev_metni, devam=istek.devam)
             DURUM.sonuc = {
                 "proje": True,
                 "alt_gorevler": [
@@ -112,7 +124,7 @@ def _gorev_kos(istek: GorevIstegi) -> None:
                 ),
             }
         else:
-            state = ork.gorev_calistir(istek.gorev, devam=istek.devam)
+            state = ork.gorev_calistir(gorev_metni, devam=istek.devam)
             DURUM.sonuc = {
                 "proje": False,
                 "dogrulama_gecti": state.ciktilar.get("dogrulama_gecti") == "True",
@@ -144,8 +156,9 @@ def _varsayilan_fabrika(ws: Path, executor: ToolExecutor, log) -> Orkestrator:
     return Orkestrator(ws, executor=executor, log=log)
 
 
-# Testlerin sahte orkestratör enjekte edebilmesi için modül düzeyinde
+# Testlerin sahte orkestratör/zenginleştirici enjekte edebilmesi için modül düzeyinde
 ORKESTRATOR_FABRIKASI = _varsayilan_fabrika
+TASARIM_ZENGINLESTIRICI = gorevi_zenginlestir
 
 
 @app.post("/api/gorev")

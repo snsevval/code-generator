@@ -36,6 +36,7 @@ GIZLENEN_KLASORLER = {
     ".pytest_cache",
     ".state",
     ".next",
+    ".kontrol",  # check_page ekran görüntüleri
 }
 
 # Anthropic Messages API biçiminde araç tanımları (ajan isteklerine eklenecek)
@@ -108,6 +109,24 @@ TOOL_TANIMLARI = [
                 }
             },
             "required": ["query"],
+        },
+    },
+    {
+        "name": "check_page",
+        "description": (
+            "Bir HTML dosyasını headless tarayıcıda açar: sayfa başlığını, konsol "
+            "hatalarını ve görsel kalite analizini döndürür, ekran görüntüsü alır. "
+            "HTML/arayüz dosyası ürettiysen veya doğruluyorsan mutlaka kullan."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "path": {
+                    "type": "string",
+                    "description": "Açılacak HTML dosyasının göreli yolu",
+                }
+            },
+            "required": ["path"],
         },
     },
     {
@@ -310,6 +329,66 @@ class ToolExecutor:
         etiket = "oluşturuldu" if yeni_dosya else "güncellendi"
         return ToolSonucu(True, f"{path} {etiket}.\n\n{_kes(diff)}")
 
+    def check_page(self, path: str) -> ToolSonucu:
+        """HTML dosyasını headless tarayıcıda açar: hatalar + screenshot + görsel analiz."""
+        try:
+            tam = self._coz(path)
+        except ValueError as e:
+            return ToolSonucu(False, f"HATA: {e}")
+        if not tam.is_file():
+            return ToolSonucu(False, f"HATA: dosya bulunamadı: {path!r}")
+
+        try:
+            from playwright.sync_api import sync_playwright
+        except ImportError:
+            return ToolSonucu(
+                False,
+                "HATA: playwright kurulu değil. Kurulum: uv sync && "
+                "uv run playwright install chromium",
+            )
+
+        konsol_hatalari: list[str] = []
+        try:
+            with sync_playwright() as p:
+                tarayici = p.chromium.launch(headless=True)
+                sayfa = tarayici.new_page()
+                sayfa.on(
+                    "console",
+                    lambda m: konsol_hatalari.append(f"[{m.type}] {m.text}")
+                    if m.type in ("error", "warning")
+                    else None,
+                )
+                sayfa.on("pageerror", lambda e: konsol_hatalari.append(f"[pageerror] {e}"))
+                sayfa.goto(tam.as_uri(), wait_until="load", timeout=30_000)
+                sayfa.wait_for_timeout(400)  # geç çalışan scriptlere pay
+                baslik = sayfa.title()
+
+                kontrol = self.workspace / ".kontrol"
+                kontrol.mkdir(exist_ok=True)
+                ekran = kontrol / (tam.stem + ".png")
+                sayfa.screenshot(path=str(ekran), full_page=True)
+                tarayici.close()
+        except Exception as e:  # tarayıcı açılamadı / sayfa yüklenemedi
+            return ToolSonucu(False, f"HATA: sayfa açılamadı: {e}")
+
+        parcalar = [f"Sayfa açıldı: {path} (başlık: {baslik or '(boş)'})"]
+        if konsol_hatalari:
+            parcalar.append("Konsol hataları:\n" + "\n".join(konsol_hatalari[:20]))
+        else:
+            parcalar.append("Konsol: temiz (hata/uyarı yok)")
+        parcalar.append(f"Ekran görüntüsü: {ekran.relative_to(self.workspace).as_posix()}")
+
+        # Görsel analiz (opsiyonel; anahtar yoksa sessizce atlanır) — içe aktarma
+        # burada: gorsel modülü httpx kullanır, döngüsel bağımlılık yok ama tembel
+        # tutmak testlerde sahtelemeyi kolaylaştırır
+        from orchestrator.gorsel import gorsel_acik, gorsel_analiz
+
+        if gorsel_acik():
+            analiz = gorsel_analiz(ekran)
+            if analiz:
+                parcalar.append(f"Görsel analiz (Gemini):\n{analiz}")
+        return ToolSonucu(True, _kes("\n\n".join(parcalar)))
+
     def run_shell(self, command: str, timeout: float | None = None) -> ToolSonucu:
         if not command or not command.strip():
             return ToolSonucu(False, "HATA: command boş olamaz")
@@ -347,6 +426,8 @@ class ToolExecutor:
             return self.list_files(girdi.get("path") or ".")
         if ad == "search_files":
             return self.search_files(girdi.get("query", ""))
+        if ad == "check_page":
+            return self.check_page(girdi.get("path", ""))
         if ad == "read_file":
             return self.read_file(girdi.get("path", ""))
         if ad == "write_file":

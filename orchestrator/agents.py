@@ -70,21 +70,24 @@ AJANLAR: dict[str, AjanTanimi] = {
         sistem_prompt=_ORTAK
         + " Rolün: CODEGEN. Sana verilen planı uygula: dosyaları write_file ile yaz, "
         "gerekirse read_file ile mevcut kodu incele, hızlı doğrulamalar için run_shell "
-        "kullanabilirsin. Plandaki her adımı tamamla; bitirince hangi dosyaları "
-        "yazdığını özetle.",
-        araclar=("list_files", "search_files", "read_file", "write_file", "run_shell"),
+        "kullanabilirsin. HTML/arayüz dosyası ürettiysen check_page ile açıp konsol "
+        "hatalarını ve görsel analizi kontrol et, bulgulara göre düzelt. Plandaki her "
+        "adımı tamamla; bitirince hangi dosyaları yazdığını özetle.",
+        araclar=("list_files", "search_files", "read_file", "write_file", "run_shell", "check_page"),
     ),
     "validator": AjanTanimi(
         ad="validator",
         sistem_prompt=_ORTAK
         + " Rolün: TEST/VALIDATOR. Üretilen kodu OLDUĞU GİBİ doğrula: testler varsa "
         "run_shell ile çalıştır, hiç test yoksa yalnızca YENİ bir test dosyası ekleyip "
-        "koş. Mevcut dosyaları (uygulama kodu veya var olan testler) ASLA değiştirme "
+        "koş. HTML/arayüz dosyası doğruluyorsan check_page ile aç; konsol hataları ve "
+        "görsel analiz bulguları kararının parçasıdır. Mevcut dosyaları (uygulama kodu "
+        "veya var olan testler) ASLA değiştirme "
         "veya yeniden yazma — düzeltme senin işin değil, Debugger'ın işi. "
         "Cevabının EN SON satırı tam olarak şu ikisinden biri olmalı: "
         f"'{BASARI_ISARETI}' veya '{BASARISIZLIK_ISARETI}'. Başarısızsa üstüne hata "
         "çıktısını ve nedenini yaz.",
-        araclar=("list_files", "search_files", "read_file", "write_file", "run_shell"),
+        araclar=("list_files", "search_files", "read_file", "write_file", "run_shell", "check_page"),
         mevcut_dosyayi_degistiremez=True,
     ),
     "debugger": AjanTanimi(
@@ -97,7 +100,7 @@ AJANLAR: dict[str, AjanTanimi] = {
         "raporla ve bitir. Hata gerçekse: kök nedeni bul, düzeltmeyi write_file ile "
         "uygula, run_shell ile düzeltmenin tuttuğunu göster. Semptomu değil nedeni "
         "düzelt.",
-        araclar=("list_files", "search_files", "read_file", "write_file", "run_shell"),
+        araclar=("list_files", "search_files", "read_file", "write_file", "run_shell", "check_page"),
     ),
     "decomposer": AjanTanimi(
         ad="decomposer",
@@ -115,7 +118,7 @@ AJANLAR: dict[str, AjanTanimi] = {
         + " Rolün: REVIEWER. Üretilen kodu read_file ile incele ve kısa bir inceleme "
         "raporu yaz: doğruluk riskleri, basitleştirme fırsatları, eksik testler. "
         "Dosya değiştirme; yalnızca raporla.",
-        araclar=("list_files", "search_files", "read_file"),
+        araclar=("list_files", "search_files", "read_file", "check_page"),
     ),
 }
 
