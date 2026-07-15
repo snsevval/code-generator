@@ -310,6 +310,13 @@ class Orkestrator:
         devam=True ise ve aynı görev için kayıtlı state varsa, tamamlanan
         aşamalar atlanarak kalınan yerden sürülür.
         """
+        try:
+            return self._gorev_calistir(gorev, devam)
+        finally:
+            # Hata da olsa açık arka plan sunucuları kapansın (sızıntı önleme)
+            self.executor.temizle()
+
+    def _gorev_calistir(self, gorev: str, devam: bool) -> OturumState:
         state = OturumState.yukle(self.state_yolu) if devam else None
         if state is None or state.gorev != gorev:
             state = OturumState(gorev=gorev)

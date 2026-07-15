@@ -162,4 +162,22 @@ sistemi var. Karma model: ajanlar NIM'de, yalnızca görüntü analizi Gemini'ye
 - [x] Uçtan uca doğrulandı: portfolyo görevi NIM'de koştu; Codegen+Validator check_page
       kullandı, doğrulama geçti, üretilen sayfa tasarım sistemli (koyu tema + tutarlı
       aksan) — 13 yeni test (toplam 120)
-- [ ] 2. dalga: React/Next üretimi (uzun komut + arka plan sunucu araçları)
+- [x] 2. dalga (Faz 8): arka plan süreç yönetimi — full-stack yeteneği
+
+## Faz 8 — Arka Plan Süreç Yönetimi (full-stack, 2026-07-15)
+
+Bitmeyen süreçler (dev sunucu, backend API) artık başlatılıp canlıyken doğrulanıp
+durdurulabiliyor. React/Next dev sunucusu ve canlı backend doğrulamasının kilidi buydu.
+
+- [x] `orchestrator/sunucu.py` — SunucuYoneticisi: start/stop/log, port dinleme
+      beklemesi, süreç AĞACI öldürme (Windows taskkill /T, POSIX killpg)
+- [x] Araçlar: `start_server` (arka planda başlat, port açılınca dön), `stop_server`,
+      `server_log`; codegen/validator/debugger'da izinli
+- [x] `check_page` artık http://localhost:PORT URL'i de açıyor (file:// yanında) —
+      canlı React/backend'i görsel doğrulama
+- [x] **Sızıntı önleme (kritik):** orkestratör görev sonunda (hata olsa bile,
+      try/finally) `executor.temizle()` ile tüm sunucuları kapatıyor
+- [x] Bağımlılık kurulumu: prompt notu — npm/pip install için run_shell timeout=600
+- [x] 11 test (gerçek http.server ile yaşam döngüsü + sızıntısızlık); uçtan uca kanıt:
+      start_server → check_page(URL, Gemini analiz) → stop_server, port serbest kaldı
+- [ ] Sonraki: gerçek Next.js/Vite projesini uçtan uca ürettirip canlı doğrulama koşusu

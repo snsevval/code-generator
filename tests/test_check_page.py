@@ -70,6 +70,31 @@ def test_workspace_disina_cikamaz(tmp_path):
     assert "HATA" in sonuc.cikti
 
 
+@tarayici_gerekli
+def test_canli_sunucu_url_acilir(tmp_path):
+    """check_page http:// URL ile canlı sunucuyu açabilir (React/backend doğrulama)."""
+    import socket
+
+    from orchestrator.sunucu import SunucuYoneticisi
+
+    (tmp_path / "index.html").write_text(
+        "<!doctype html><title>Canli</title><h1>Canlı Sunucu</h1>", encoding="utf-8"
+    )
+    with socket.socket() as s:
+        s.bind(("127.0.0.1", 0))
+        port = s.getsockname()[1]
+
+    yon = SunucuYoneticisi(tmp_path)
+    try:
+        yon.baslat(f"python -m http.server {port}", port)
+        sonuc = ToolExecutor(tmp_path).check_page(f"http://localhost:{port}")
+        assert sonuc.ok, sonuc.cikti
+        assert "Canli" in sonuc.cikti  # sayfa başlığı okundu
+        assert (tmp_path / ".kontrol" / "canli.png").is_file()
+    finally:
+        yon.hepsini_durdur()
+
+
 def test_olmayan_dosya(tmp_path):
     sonuc = ToolExecutor(tmp_path).check_page("yok.html")
     assert not sonuc.ok

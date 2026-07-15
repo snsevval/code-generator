@@ -37,6 +37,7 @@ GIZLENEN_KLASORLER = {
     ".state",
     ".next",
     ".kontrol",  # check_page ekran görüntüleri
+    ".sunucu",  # arka plan sunucu logları
 }
 
 # Anthropic Messages API biçiminde araç tanımları (ajan isteklerine eklenecek)
@@ -129,6 +130,44 @@ TOOL_TANIMLARI = [
                 }
             },
             "required": ["query"],
+        },
+    },
+    {
+        "name": "start_server",
+        "description": (
+            "Bitmeyen bir sunucu sürecini (npm run dev, uvicorn, python -m "
+            "http.server vb.) arka planda başlatır ve port dinlemeye başlayınca "
+            "döner. Canlı doğrulama için (React/Next dev sunucusu, backend API) "
+            "kullan; sonra check_page http://localhost:<port> ile aç. run_shell "
+            "yerine BUNU kullan — run_shell bitmeyen süreçte asılır. "
+            "Bağımlılık kurmak (npm install/pip install) gerekiyorsa ÖNCE run_shell "
+            "ile timeout=600 vererek kur."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "command": {"type": "string", "description": "Sunucuyu başlatan komut"},
+                "port": {"type": "number", "description": "Sunucunun dinleyeceği port"},
+            },
+            "required": ["command", "port"],
+        },
+    },
+    {
+        "name": "stop_server",
+        "description": "start_server ile başlatılan sunucuyu durdurur.",
+        "input_schema": {
+            "type": "object",
+            "properties": {"port": {"type": "number", "description": "Durdurulacak port"}},
+            "required": ["port"],
+        },
+    },
+    {
+        "name": "server_log",
+        "description": "Çalışan bir sunucunun son loglarını gösterir (hata ayıklama).",
+        "input_schema": {
+            "type": "object",
+            "properties": {"port": {"type": "number", "description": "Sunucunun portu"}},
+            "required": ["port"],
         },
     },
     {
@@ -249,6 +288,20 @@ class ToolExecutor:
         if not self.workspace.is_dir():
             raise ValueError(f"workspace bir klasör değil: {self.workspace}")
         self._shell = shell_runner or LocalShellRunner(self.workspace)
+        self._sunucu_yoneticisi = None  # tembel: yalnızca start_server çağrılırsa kurulur
+
+    @property
+    def sunucu_yoneticisi(self):
+        if self._sunucu_yoneticisi is None:
+            from orchestrator.sunucu import SunucuYoneticisi
+
+            self._sunucu_yoneticisi = SunucuYoneticisi(self.workspace)
+        return self._sunucu_yoneticisi
+
+    def temizle(self) -> None:
+        """Görev sonu: açık arka plan sunucularını kapatır (sızıntı önleme)."""
+        if self._sunucu_yoneticisi is not None:
+            self._sunucu_yoneticisi.hepsini_durdur()
 
     # --- Path doğrulama ---
 
@@ -349,14 +402,52 @@ class ToolExecutor:
         etiket = "oluşturuldu" if yeni_dosya else "güncellendi"
         return ToolSonucu(True, f"{path} {etiket}.\n\n{_kes(diff)}")
 
-    def check_page(self, path: str) -> ToolSonucu:
-        """HTML dosyasını headless tarayıcıda açar: hatalar + screenshot + görsel analiz."""
+    def start_server(self, command: str, port: int) -> ToolSonucu:
+        if not command or not command.strip():
+            return ToolSonucu(False, "HATA: command boş olamaz")
         try:
-            tam = self._coz(path)
-        except ValueError as e:
-            return ToolSonucu(False, f"HATA: {e}")
-        if not tam.is_file():
-            return ToolSonucu(False, f"HATA: dosya bulunamadı: {path!r}")
+            port = int(port)
+        except (TypeError, ValueError):
+            return ToolSonucu(False, "HATA: port bir sayı olmalı")
+        mesaj = self.sunucu_yoneticisi.baslat(command, port)
+        return ToolSonucu(not mesaj.startswith("HATA"), mesaj)
+
+    def stop_server(self, port: int) -> ToolSonucu:
+        try:
+            port = int(port)
+        except (TypeError, ValueError):
+            return ToolSonucu(False, "HATA: port bir sayı olmalı")
+        mesaj = self.sunucu_yoneticisi.durdur(port)
+        return ToolSonucu(not mesaj.startswith("HATA"), mesaj)
+
+    def server_log(self, port: int) -> ToolSonucu:
+        try:
+            port = int(port)
+        except (TypeError, ValueError):
+            return ToolSonucu(False, "HATA: port bir sayı olmalı")
+        mesaj = self.sunucu_yoneticisi.log(port)
+        return ToolSonucu(not mesaj.startswith("HATA"), _kes(mesaj))
+
+    def check_page(self, path: str) -> ToolSonucu:
+        """Sayfayı headless tarayıcıda açar: hatalar + screenshot + görsel analiz.
+
+        path bir dosya yolu (file://) veya canlı sunucu URL'si
+        (http://localhost:PORT) olabilir — ikincisi start_server ile birlikte
+        çalışan React/backend'i görsel doğrulamak için.
+        """
+        canli = path.startswith(("http://", "https://"))
+        if canli:
+            hedef_url = path
+            ekran_adi = "canli"
+        else:
+            try:
+                tam = self._coz(path)
+            except ValueError as e:
+                return ToolSonucu(False, f"HATA: {e}")
+            if not tam.is_file():
+                return ToolSonucu(False, f"HATA: dosya bulunamadı: {path!r}")
+            hedef_url = tam.as_uri()
+            ekran_adi = tam.stem
 
         try:
             from playwright.sync_api import sync_playwright
@@ -379,13 +470,13 @@ class ToolExecutor:
                     else None,
                 )
                 sayfa.on("pageerror", lambda e: konsol_hatalari.append(f"[pageerror] {e}"))
-                sayfa.goto(tam.as_uri(), wait_until="load", timeout=30_000)
+                sayfa.goto(hedef_url, wait_until="load", timeout=30_000)
                 sayfa.wait_for_timeout(400)  # geç çalışan scriptlere pay
                 baslik = sayfa.title()
 
                 kontrol = self.workspace / ".kontrol"
                 kontrol.mkdir(exist_ok=True)
-                ekran = kontrol / (tam.stem + ".png")
+                ekran = kontrol / (ekran_adi + ".png")
                 sayfa.screenshot(path=str(ekran), full_page=True)
                 tarayici.close()
         except Exception as e:  # tarayıcı açılamadı / sayfa yüklenemedi
@@ -486,6 +577,12 @@ class ToolExecutor:
             return self.search_files(girdi.get("query", ""))
         if ad == "check_page":
             return self.check_page(girdi.get("path", ""))
+        if ad == "start_server":
+            return self.start_server(girdi.get("command", ""), girdi.get("port"))
+        if ad == "stop_server":
+            return self.stop_server(girdi.get("port"))
+        if ad == "server_log":
+            return self.server_log(girdi.get("port"))
         if ad == "read_file":
             return self.read_file(girdi.get("path", ""))
         if ad == "write_file":

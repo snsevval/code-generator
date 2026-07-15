@@ -73,9 +73,13 @@ AJANLAR: dict[str, AjanTanimi] = {
         "yazma — edit_file ile sadece ilgili kısmı değiştir (büyük dosyaları baştan "
         "yazmak hata üretir). read_file ile mevcut kodu incele, run_shell ile hızlı "
         "doğrula. HTML/arayüz dosyası ürettiysen check_page ile açıp konsol hatalarını "
-        "ve görsel analizi kontrol et, bulguları edit_file ile düzelt. Plandaki her "
+        "ve görsel analizi kontrol et, bulguları edit_file ile düzelt. React/Next veya "
+        "backend gibi çalışan bir uygulama ürettiysen: bağımlılıkları run_shell + "
+        "timeout=600 ile kur (npm install/pip install), sonra start_server ile "
+        "başlat, check_page http://localhost:<port> ile veya run_shell'de curl ile "
+        "canlı doğrula, iş bitince stop_server ile durdur. Plandaki her "
         "adımı tamamla; bitirince hangi dosyaları yazdığını özetle.",
-        araclar=("list_files", "search_files", "read_file", "write_file", "edit_file", "run_shell", "check_page"),
+        araclar=("list_files", "search_files", "read_file", "write_file", "edit_file", "run_shell", "check_page", "start_server", "stop_server", "server_log"),
     ),
     "validator": AjanTanimi(
         ad="validator",
@@ -89,7 +93,7 @@ AJANLAR: dict[str, AjanTanimi] = {
         "Cevabının EN SON satırı tam olarak şu ikisinden biri olmalı: "
         f"'{BASARI_ISARETI}' veya '{BASARISIZLIK_ISARETI}'. Başarısızsa üstüne hata "
         "çıktısını ve nedenini yaz.",
-        araclar=("list_files", "search_files", "read_file", "write_file", "edit_file", "run_shell", "check_page"),
+        araclar=("list_files", "search_files", "read_file", "write_file", "edit_file", "run_shell", "check_page", "start_server", "stop_server", "server_log"),
         mevcut_dosyayi_degistiremez=True,
     ),
     "debugger": AjanTanimi(
@@ -102,7 +106,7 @@ AJANLAR: dict[str, AjanTanimi] = {
         "raporla ve bitir. Hata gerçekse: kök nedeni bul, düzeltmeyi edit_file ile "
         "uygula (tüm dosyayı yeniden yazma), run_shell ile düzeltmenin tuttuğunu "
         "göster. Semptomu değil nedeni düzelt.",
-        araclar=("list_files", "search_files", "read_file", "write_file", "edit_file", "run_shell", "check_page"),
+        araclar=("list_files", "search_files", "read_file", "write_file", "edit_file", "run_shell", "check_page", "start_server", "stop_server", "server_log"),
     ),
     "decomposer": AjanTanimi(
         ad="decomposer",
