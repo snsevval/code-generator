@@ -22,7 +22,9 @@ _KABUK_NOTU = (
     f"{'Windows cmd' if sys.platform == 'win32' else 'POSIX sh'} kabuğunda koşar. "
     "run_shell yalnızca TEK satırlık komut kabul eder — çok satırlı kod için önce "
     "write_file ile script yaz, sonra çalıştır. Python'u "
-    f"{'python' if sys.platform == 'win32' else 'python3'} olarak çağır."
+    f"{'python' if sys.platform == 'win32' else 'python3'} olarak çağır. "
+    "Ortamı KEŞFETME: echo/ls/dir/pwd/cd gibi test komutları çalıştırma, "
+    "komutlar çalışır — doğrudan görevin gerektirdiği dosyaları yaz ve komutları koş."
 )
 
 _ORTAK = (

@@ -26,8 +26,12 @@ from orchestrator.llm_client import LLMIstemcisi
 from orchestrator.state import OturumState
 from orchestrator.tool_executor import TOOL_TANIMLARI, ToolExecutor, ToolSonucu
 
-MAX_TOOL_TURU = 25  # bir ajanın tek görevde yapabileceği en fazla tool turu
+MAX_TOOL_TURU = 35  # bir ajanın tek görevde yapabileceği en fazla tool turu
 MAX_DEBUG_TURU = 3  # doğrulama başarısız kaldıkça en fazla kaç debugger turu
+# Debelenme detektörü: dosya yazmadan üst üste bu kadar run_shell = keşif israfı
+# (canlıda codegen 'echo hello'yu 6 kez deneyip 12 tur yaktı). write_file/edit_file
+# sayacı sıfırlar; npm install + pytest gibi meşru diziler bu eşiği aşmaz.
+MAX_PESPESE_KABUK = 5
 # Token tasarrufu: en son tur hariç, geçmişteki araç çıktıları bu uzunluğa kırpılır
 ESKI_ARAC_CIKTISI_KIRPMA = 400
 
@@ -120,6 +124,7 @@ class Orkestrator:
         mesajlar: list[dict] = [{"role": "user", "content": gorev_metni}]
         self.son_arac_sayisi = 0
         tekrar_sayaci: dict[tuple, int] = {}
+        pespese_kabuk = 0  # dosya yazmadan art arda run_shell (debelenme sinyali)
 
         for _ in range(MAX_TOOL_TURU):
             _gecmisi_kirp(mesajlar)
@@ -188,6 +193,23 @@ class Orkestrator:
                         # Durum değişti: bundan sonraki tekrarlar meşru
                         # (düzelt → yeniden test et döngüsü)
                         tekrar_sayaci.clear()
+                        pespese_kabuk = 0
+                    elif blok["name"] == "run_shell":
+                        pespese_kabuk += 1
+                    else:
+                        pespese_kabuk = 0
+
+                    # Debelenme detektörü: dosya yazmadan çok sayıda kabuk komutu =
+                    # ortam keşfi israfı (canlıda 12 tur 'echo hello' yakıldı)
+                    if pespese_kabuk >= MAX_PESPESE_KABUK:
+                        sonuc = ToolSonucu(
+                            sonuc.ok,
+                            sonuc.cikti
+                            + f"\n[uyarı: {pespese_kabuk} kabuk komutunu üst üste dosya "
+                            "yazmadan çalıştırdın. Ortamı keşfetmeyi bırak — komutlar "
+                            "çalışıyor. Doğrudan gereken dosyaları write_file/edit_file "
+                            "ile yaz ve göreve odaklan.]",
+                        )
 
                 # Şema uyarısı: bilinmeyen parametre sessizce yutulmasın, model
                 # kendini düzeltebilsin (canlıda search_files'a 'path' verildi)

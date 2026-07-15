@@ -348,6 +348,43 @@ def test_write_file_tekrar_sayacini_sifirlar(tmp_path):
     assert "zaten" not in dorduncu["content"]
 
 
+# --- Debelenme detektörü ---
+
+
+def test_pespese_kabuk_uyarisi(tmp_path):
+    # 5 kez üst üste run_shell (dosya yazmadan) → uyarı enjekte edilmeli
+    senaryo = [tool_cevap("run_shell", {"command": f"echo {i}"}, f"t{i}") for i in range(5)]
+    senaryo.append(metin_cevap("tamam"))
+    ork, istemci = orkestrator_kur(tmp_path, senaryo)
+    ork.ajan_calistir(AJANLAR["debugger"], "iş yap")
+
+    # 5. komutun sonucunda debelenme uyarısı olmalı
+    besinci_sonuc = istemci.istekler[-1]["messages"][-1]["content"][0]["content"]
+    assert "keşfetmeyi bırak" in besinci_sonuc
+
+
+def test_write_file_debelenme_sayacini_sifirlar(tmp_path):
+    # Araya write_file girince kabuk sayacı sıfırlanır → uyarı çıkmamalı
+    senaryo = [
+        tool_cevap("run_shell", {"command": "echo a"}, "t1"),
+        tool_cevap("run_shell", {"command": "echo b"}, "t2"),
+        tool_cevap("write_file", {"path": "x.py", "content": "print(1)"}, "t3"),
+        tool_cevap("run_shell", {"command": "echo c"}, "t4"),
+        tool_cevap("run_shell", {"command": "echo d"}, "t5"),
+        metin_cevap("bitti"),
+    ]
+    ork, istemci = orkestrator_kur(tmp_path, senaryo)
+    ork.ajan_calistir(AJANLAR["debugger"], "iş yap")
+
+    # Hiçbir sonuçta debelenme uyarısı olmamalı (art arda en fazla 2 kabuk)
+    for istek in istemci.istekler:
+        for mesaj in istek["messages"]:
+            if isinstance(mesaj.get("content"), list):
+                for blok in mesaj["content"]:
+                    if blok.get("type") == "tool_result":
+                        assert "keşfetmeyi bırak" not in blok.get("content", "")
+
+
 # --- Şema uyarısı ---
 
 
