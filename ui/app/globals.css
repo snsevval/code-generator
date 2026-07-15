@@ -1,19 +1,21 @@
-/* Tasarım sistemi (ui-ux-pro-max): OLED koyu tema, slate paleti, yoğun panel düzeni */
+/* Tasarım sistemi (ui-ux-pro-max v2): OLED koyu + mor/indigo aksan, yoğun pano düzeni */
 :root {
-  --zemin: #0f172a;
-  --yuzey: #1e293b;
-  --yuzey-koyu: #131c30;
-  --soluk: #272f42;
-  --kenar: #334155;
-  --kenar-belirgin: #475569;
-  --metin: #f8fafc;
-  --metin-ikincil: #94a3b8;
-  --aksan: #22c55e;
-  --aksan-koyu: #052e16;
+  --zemin: #0b0f1a;
+  --yuzey: #121828;
+  --yuzey-koyu: #0e1420;
+  --soluk: #1a2236;
+  --kenar: #232d45;
+  --kenar-belirgin: #364159;
+  --metin: #f1f5f9;
+  --metin-ikincil: #8b96ad;
+  --mor: #7c3aed;
+  --mor-acik: #a78bfa;
+  --indigo: #6366f1;
+  --basari: #22c55e;
   --tehlike: #ef4444;
   --uyari: #fbbf24;
 
-  /* Yoğun (dashboard) aralık ölçeği */
+  /* Yoğun (pano) aralık ölçeği */
   --aralik-1: 4px;
   --aralik-2: 8px;
   --aralik-3: 12px;
@@ -54,7 +56,7 @@ a {
 
 /* Klavye gezinmesi için görünür odak halkası */
 :focus-visible {
-  outline: 2px solid var(--aksan);
+  outline: 2px solid var(--mor-acik);
   outline-offset: 2px;
   border-radius: 4px;
 }

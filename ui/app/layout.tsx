@@ -1,17 +1,16 @@
 import type { Metadata } from "next";
-import { Fira_Code, Fira_Sans } from "next/font/google";
+import { Fira_Code, Inter } from "next/font/google";
 import "./globals.css";
 
-const firaSans = Fira_Sans({
+const inter = Inter({
   variable: "--font-govde",
   subsets: ["latin", "latin-ext"],
-  weight: ["300", "400", "500", "600", "700"],
 });
 
 const firaCode = Fira_Code({
   variable: "--font-kod",
   subsets: ["latin", "latin-ext"],
-  weight: ["400", "500", "600", "700"],
+  weight: ["400", "500", "600"],
 });
 
 export const metadata: Metadata = {
@@ -25,7 +24,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="tr" className={`${firaSans.variable} ${firaCode.variable}`}>
+    <html lang="tr" className={`${inter.variable} ${firaCode.variable}`}>
       <body>{children}</body>
     </html>
   );

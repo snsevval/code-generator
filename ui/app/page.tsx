@@ -1,8 +1,9 @@
 "use client";
 
-// Faz 3 — Orkestratör arayüzü: görev/proje ver, ajanların ilerleyişini canlı izle.
+// Orkestratör panosu: görev ver, ajan akışını ve kaynak kullanımını canlı izle.
+// Tüm göstergeler gerçek veriden türetilir (API durumu + canlı log satırları).
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import styles from "./page.module.css";
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8090";
@@ -32,13 +33,42 @@ type Durum = {
   klasor: string | null;
 };
 
-function tokenBicimle(n: number): string {
-  return n >= 10000 ? `${(n / 1000).toFixed(1)}k` : String(n);
-}
-
 type Saglik = { api: boolean; proxy: boolean };
 
-// Log satırındaki ajan etiketine göre renk sınıfı
+const AJANLAR = [
+  { ad: "planner", etiket: "Planner" },
+  { ad: "codegen", etiket: "Codegen" },
+  { ad: "validator", etiket: "Validator" },
+  { ad: "debugger", etiket: "Debugger" },
+  { ad: "reviewer", etiket: "Reviewer" },
+] as const;
+
+type AsamaDurumu = "bekliyor" | "calisiyor" | "tamam";
+
+// Canlı logdan ajan akış durumunu türet
+function asamaDurumlari(log: string[]): Record<string, AsamaDurumu> {
+  const durum: Record<string, AsamaDurumu> = {};
+  for (const a of AJANLAR) durum[a.ad] = "bekliyor";
+  for (const satir of log) {
+    for (const a of AJANLAR) {
+      if (satir.includes(`[${a.ad}] başlıyor`)) durum[a.ad] = "calisiyor";
+      if (satir.includes(`[${a.ad}] bitti`)) durum[a.ad] = "tamam";
+    }
+  }
+  return durum;
+}
+
+// Canlı logdan yazılan dosyaları türet (write_file çağrıları)
+function ciktiDosyalari(log: string[]): string[] {
+  const dosyalar: string[] = [];
+  for (const satir of log) {
+    if (!satir.includes("write_file")) continue;
+    const eslesme = satir.match(/'path':\s*'([^']+)'/);
+    if (eslesme && !dosyalar.includes(eslesme[1])) dosyalar.push(eslesme[1]);
+  }
+  return dosyalar.reverse(); // en son yazılan en üstte
+}
+
 function satirSinifi(satir: string): string {
   if (satir.includes("[planner]")) return styles.planner;
   if (satir.includes("[codegen]")) return styles.codegen;
@@ -46,27 +76,33 @@ function satirSinifi(satir: string): string {
   if (satir.includes("[debugger]")) return styles.debuggerAjan;
   if (satir.includes("[reviewer]")) return styles.reviewer;
   if (satir.includes("[decomposer]") || satir.includes("[proje]")) return styles.proje;
-  if (satir.includes("[orkestratör]")) return styles.orkestrator;
+  if (satir.includes("[orkestratör]") || satir.includes("[git]")) return styles.orkestrator;
   return "";
 }
 
-// --- SVG simgeler (emoji yerine; tutarlı 16px çizgi seti) ---
+function tokenBicimle(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1000) return `${(n / 1000).toFixed(1)}K`;
+  return String(n);
+}
 
-const Spinner = () => (
-  <svg className={styles.spinner} width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden>
+// --- SVG simgeler (tek çizgi ailesi, 16px) ---
+
+const Spinner = ({ boyut = 16 }: { boyut?: number }) => (
+  <svg className={styles.spinner} width={boyut} height={boyut} viewBox="0 0 24 24" fill="none" aria-hidden>
     <circle cx="12" cy="12" r="9" stroke="currentColor" strokeOpacity="0.25" strokeWidth="3" />
     <path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
   </svg>
 );
 
-const IkonBasarili = () => (
+const IkonTamam = () => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden>
-    <circle cx="12" cy="12" r="10" fill="var(--aksan)" fillOpacity="0.15" />
-    <path d="m8 12.5 2.5 2.5L16 9.5" stroke="var(--aksan)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    <circle cx="12" cy="12" r="10" fill="var(--basari)" fillOpacity="0.15" />
+    <path d="m8 12.5 2.5 2.5L16 9.5" stroke="var(--basari)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
   </svg>
 );
 
-const IkonBasarisiz = () => (
+const IkonHata = () => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden>
     <circle cx="12" cy="12" r="10" fill="var(--tehlike)" fillOpacity="0.15" />
     <path d="m9 9 6 6M15 9l-6 6" stroke="var(--tehlike)" strokeWidth="2" strokeLinecap="round" />
@@ -79,21 +115,17 @@ const IkonBekliyor = () => (
   </svg>
 );
 
-function AltGorevSatiri({ alt }: { alt: AltGorev }) {
-  const ikon =
-    alt.durum === "basarili" ? <IkonBasarili /> : alt.durum === "basarisiz" ? <IkonBasarisiz /> : <IkonBekliyor />;
-  const etiket =
-    alt.durum === "basarili" ? "tamamlandı" : alt.durum === "basarisiz" ? "başarısız" : "bekliyor";
-  return (
-    <li className={styles.altGorev} data-durum={alt.durum}>
-      {ikon}
-      <span className={styles.altGorevMetin}>
-        {alt.id}. {alt.gorev}
-      </span>
-      <span className={styles.altGorevEtiket}>{etiket}</span>
-    </li>
-  );
-}
+const IkonDosya = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden>
+    <path
+      d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8l-5-5Z"
+      stroke="var(--mor-acik)"
+      strokeWidth="1.7"
+      strokeLinejoin="round"
+    />
+    <path d="M14 3v5h5" stroke="var(--mor-acik)" strokeWidth="1.7" strokeLinejoin="round" />
+  </svg>
+);
 
 export default function Anasayfa() {
   const [gorev, setGorev] = useState("");
@@ -111,7 +143,7 @@ export default function Anasayfa() {
       const y = await fetch(`${API}/api/durum`);
       setDurum(await y.json());
     } catch {
-      setDurum(null); // API kapalı
+      setDurum(null);
     }
   }, []);
 
@@ -140,6 +172,9 @@ export default function Anasayfa() {
     logSonu.current?.scrollIntoView({ behavior: "smooth" });
   }, [durum?.log.length]);
 
+  const asamalar = useMemo(() => asamaDurumlari(durum?.log ?? []), [durum?.log]);
+  const dosyalar = useMemo(() => ciktiDosyalari(durum?.log ?? []), [durum?.log]);
+
   async function onayGonder(devam: boolean) {
     try {
       await fetch(`${API}/api/onay`, {
@@ -149,7 +184,7 @@ export default function Anasayfa() {
       });
       await durumuGetir();
     } catch {
-      // durum yoklaması zaten sürüyor; geçici hata yut
+      /* durum yoklaması sürüyor */
     }
   }
 
@@ -172,172 +207,321 @@ export default function Anasayfa() {
     }
   }
 
+  const durumEtiketi = !durum
+    ? "API kapalı"
+    : durum.onay_bekleyen
+      ? "Onay bekliyor"
+      : durum.calisiyor
+        ? "Çalışıyor"
+        : durum.hata
+          ? "Hata"
+          : durum.sonuc
+            ? durum.sonuc.dogrulama_gecti
+              ? "Tamamlandı"
+              : "Doğrulama kaldı"
+            : "Boşta";
+
+  const k = durum?.kullanim;
+  const toplamToken = k ? k.girdi + k.cikti : 0;
+  const girisAcisi = toplamToken > 0 ? (k!.girdi / toplamToken) * 360 : 0;
+
   const rozet = (aktif: boolean | undefined, ad: string) => (
     <span className={`${styles.rozet} ${aktif ? styles.rozetIyi : styles.rozetKotu}`}>
       <span className={styles.rozetNokta} aria-hidden />
-      {ad}: {aktif ? "açık" : "kapalı"}
+      {ad}: {aktif ? "bağlı" : "kapalı"}
     </span>
   );
 
   return (
-    <main className={styles.ana}>
+    <div className={styles.kabuk}>
       <header className={styles.baslik}>
-        <h1>Kod Üretim Orkestratörü</h1>
+        <div className={styles.marka}>
+          <span className={styles.markaLogo} aria-hidden>
+            {"</>"}
+          </span>
+          <div>
+            <h1>Kod Üretim Orkestratörü</h1>
+            <p>Doğal dille görev tanımla, ajan döngüsünü canlı izle</p>
+          </div>
+        </div>
         <div className={styles.rozetler}>
           {rozet(saglik?.api, "API")}
           {rozet(saglik?.proxy, "Proxy")}
         </div>
       </header>
 
-      <form onSubmit={gorevBaslat} className={styles.form}>
-        <label className={styles.alanEtiketi} htmlFor="gorev">
-          Görev {proje && <em>(proje modu: hedef alt görevlere bölünür)</em>}
-        </label>
-        <textarea
-          id="gorev"
-          value={gorev}
-          onChange={(e) => setGorev(e.target.value)}
-          placeholder={
-            proje
-              ? "Büyük hedefi yaz… (örn. notları JSON'da saklayan modül + CLI + pytest testleri)"
-              : "Görevi yaz… (örn. n'inci fibonacci sayısını yazan fib.py, pytest testleriyle)"
-          }
-          rows={3}
-          required
-        />
-        <div className={styles.formAlt}>
-          <select value={model} onChange={(e) => setModel(e.target.value)} aria-label="Model seçimi">
-            <option value="">Varsayılan model (proxy rotası)</option>
-            <option value="gemini/gemini-2.5-flash">Gemini 2.5 Flash</option>
-            <option value="groq/llama-3.3-70b-versatile">Groq Llama 3.3 70B</option>
-          </select>
-          <label className={styles.onayKutusu}>
-            <input type="checkbox" checked={proje} onChange={(e) => setProje(e.target.checked)} />
-            Proje modu
-          </label>
-          {proje && (
-            <label className={styles.onayKutusu}>
-              <input type="checkbox" checked={onayli} onChange={(e) => setOnayli(e.target.checked)} />
-              Adım adım onay
-            </label>
-          )}
-          <label className={styles.onayKutusu}>
-            <input type="checkbox" checked={docker} onChange={(e) => setDocker(e.target.checked)} />
-            Docker sandbox
-          </label>
-          <button type="submit" disabled={durum?.calisiyor ?? false}>
-            {durum?.calisiyor ? (
-              <>
-                <Spinner /> Çalışıyor…
-              </>
-            ) : (
-              "Başlat"
-            )}
-          </button>
-        </div>
-        {gonderimHatasi && (
-          <p className={styles.hata} role="alert">
-            Hata: {gonderimHatasi}
-          </p>
-        )}
-      </form>
-
-      {durum?.gorev && (
-        <section className={styles.panel}>
-          <h2 className={styles.gorevBasligi}>
-            {durum.calisiyor && <Spinner />}
-            <span>{durum.gorev}</span>
-          </h2>
-
-          {(durum.klasor || (durum.kullanim && durum.kullanim.istek > 0)) && (
-            <p className={styles.kullanim}>
-              {durum.klasor && <>Klasör: {durum.klasor}</>}
-              {durum.klasor && durum.kullanim && durum.kullanim.istek > 0 && " · "}
-              {durum.kullanim && durum.kullanim.istek > 0 && (
-                <>
-                  Token: {tokenBicimle(durum.kullanim.girdi)} giriş ·{" "}
-                  {tokenBicimle(durum.kullanim.cikti)} çıkış · {durum.kullanim.istek} istek
-                </>
-              )}
-            </p>
-          )}
-
-          {durum.sonuc?.alt_gorevler && (
-            <ul className={styles.altGorevler} aria-label="Alt görevler">
-              {durum.sonuc.alt_gorevler.map((alt) => (
-                <AltGorevSatiri key={alt.id} alt={alt} />
-              ))}
-            </ul>
-          )}
-
-          {durum.onay_bekleyen && (
-            <div className={styles.onayPaneli} role="alertdialog" aria-label="Onay bekleniyor">
-              <p>
-                <strong>Alt görev {durum.onay_bekleyen.id} tamamlandı.</strong>{" "}
-                {durum.onay_bekleyen.gorev}
-              </p>
-              <div className={styles.onayButonlari}>
-                <button type="button" onClick={() => onayGonder(true)}>
-                  Devam et
-                </button>
-                <button type="button" className={styles.durdurButonu} onClick={() => onayGonder(false)}>
-                  Durdur
-                </button>
-              </div>
+      <div className={styles.izgara}>
+        {/* ---- Sol: görev + akış + log ---- */}
+        <main className={styles.anaKolon}>
+          <form onSubmit={gorevBaslat} className={styles.kart}>
+            <div className={styles.kartBaslik}>
+              <h2>Görev Oluştur</h2>
+              <span className={styles.karakterSayaci}>{gorev.length} karakter</span>
             </div>
-          )}
-
-          <div className={styles.log} aria-live="polite">
-            {durum.log.map((satir, i) => (
-              <div key={i} className={satirSinifi(satir)}>
-                {satir}
-              </div>
-            ))}
-            {durum.calisiyor && <div className={styles.imlec}>▋</div>}
-            <div ref={logSonu} />
-          </div>
-
-          {durum.hata && (
-            <p className={styles.hata} role="alert">
-              Görev hatası: {durum.hata}
-            </p>
-          )}
-
-          {durum.sonuc && (
-            <div className={styles.sonuc}>
-              <p className={styles.sonucOzeti}>
-                {durum.sonuc.dogrulama_gecti ? <IkonBasarili /> : <IkonBasarisiz />}
-                <strong className={durum.sonuc.dogrulama_gecti ? styles.gecti : styles.kaldi}>
-                  {durum.sonuc.dogrulama_gecti ? "DOĞRULAMA GEÇTİ" : "DOĞRULAMA KALDI"}
-                </strong>
-                {!durum.sonuc.proje && <span> · Debug turu: {durum.sonuc.debug_turu}</span>}
-                {durum.sonuc.proje && durum.sonuc.entegrasyon && (
-                  <span> · Entegrasyon: {durum.sonuc.entegrasyon}</span>
+            <textarea
+              value={gorev}
+              onChange={(e) => setGorev(e.target.value)}
+              placeholder={
+                proje
+                  ? "Büyük hedefi yaz… (alt görevlere bölünüp zincir halinde koşulur)"
+                  : "Görevi yaz… (örn. sifre_uret.py: güçlü şifre üreten araç, pytest testleriyle)"
+              }
+              rows={3}
+              required
+            />
+            <div className={styles.formAlt}>
+              <select value={model} onChange={(e) => setModel(e.target.value)} aria-label="Model seçimi">
+                <option value="">Varsayılan model (proxy rotası)</option>
+                <option value="gemini/gemini-2.5-flash">Gemini 2.5 Flash</option>
+                <option value="groq/llama-3.3-70b-versatile">Groq Llama 3.3 70B</option>
+              </select>
+              <label className={`${styles.anahtar} ${proje ? styles.anahtarAcik : ""}`}>
+                <input type="checkbox" checked={proje} onChange={(e) => setProje(e.target.checked)} />
+                Proje modu
+              </label>
+              {proje && (
+                <label className={`${styles.anahtar} ${onayli ? styles.anahtarAcik : ""}`}>
+                  <input type="checkbox" checked={onayli} onChange={(e) => setOnayli(e.target.checked)} />
+                  Adım adım onay
+                </label>
+              )}
+              <label className={`${styles.anahtar} ${docker ? styles.anahtarAcik : ""}`}>
+                <input type="checkbox" checked={docker} onChange={(e) => setDocker(e.target.checked)} />
+                Docker sandbox
+              </label>
+              <button type="submit" disabled={durum?.calisiyor ?? false}>
+                {durum?.calisiyor ? (
+                  <>
+                    <Spinner /> Çalışıyor…
+                  </>
+                ) : (
+                  <>▶ Başlat</>
                 )}
-              </p>
-              {durum.sonuc.plan && (
-                <details>
-                  <summary>Plan</summary>
-                  <pre>{durum.sonuc.plan}</pre>
-                </details>
-              )}
-              {durum.sonuc.reviewer && (
-                <details open>
-                  <summary>Reviewer raporu</summary>
-                  <pre>{durum.sonuc.reviewer}</pre>
-                </details>
-              )}
+              </button>
             </div>
-          )}
-        </section>
-      )}
+            {gonderimHatasi && (
+              <p className={styles.hata} role="alert">
+                {gonderimHatasi}
+              </p>
+            )}
+          </form>
 
-      {!durum && (
-        <p className={styles.bilgi}>
-          API kapalı görünüyor. Başlatmak için:{" "}
-          <code>uv run uvicorn orchestrator.api:app --port 8090</code>
-        </p>
-      )}
-    </main>
+          {durum?.gorev && (
+            <>
+              <section className={styles.kart} aria-label="Orkestrasyon akışı">
+                <div className={styles.kartBaslik}>
+                  <h2>Orkestrasyon Akışı</h2>
+                </div>
+                <ol className={styles.akis}>
+                  {AJANLAR.map((a, i) => {
+                    const d = asamalar[a.ad];
+                    return (
+                      <li key={a.ad} className={styles.akisAdimi} data-durum={d}>
+                        <span className={styles.akisNumara}>
+                          {d === "tamam" ? <IkonTamam /> : d === "calisiyor" ? <Spinner /> : i + 1}
+                        </span>
+                        <span className={styles.akisAd}>{a.etiket}</span>
+                        <span className={styles.akisDurum}>
+                          {d === "tamam" ? "tamamlandı" : d === "calisiyor" ? "çalışıyor" : "beklemede"}
+                        </span>
+                      </li>
+                    );
+                  })}
+                </ol>
+              </section>
+
+              {durum.onay_bekleyen && (
+                <div className={styles.onayPaneli} role="alertdialog" aria-label="Onay bekleniyor">
+                  <p>
+                    <strong>Alt görev {durum.onay_bekleyen.id} tamamlandı.</strong> {durum.onay_bekleyen.gorev}
+                  </p>
+                  <div className={styles.onayButonlari}>
+                    <button type="button" onClick={() => onayGonder(true)}>
+                      Devam et
+                    </button>
+                    <button type="button" className={styles.durdurButonu} onClick={() => onayGonder(false)}>
+                      Durdur
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {durum.sonuc?.alt_gorevler && (
+                <section className={styles.kart} aria-label="Alt görevler">
+                  <div className={styles.kartBaslik}>
+                    <h2>Alt Görevler</h2>
+                  </div>
+                  <ul className={styles.altGorevler}>
+                    {durum.sonuc.alt_gorevler.map((alt) => (
+                      <li key={alt.id} className={styles.altGorev} data-durum={alt.durum}>
+                        {alt.durum === "basarili" ? <IkonTamam /> : alt.durum === "basarisiz" ? <IkonHata /> : <IkonBekliyor />}
+                        <span className={styles.altGorevMetin}>
+                          {alt.id}. {alt.gorev}
+                        </span>
+                        <span className={styles.altGorevEtiket}>
+                          {alt.durum === "basarili" ? "tamamlandı" : alt.durum === "basarisiz" ? "başarısız" : "bekliyor"}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              )}
+
+              <section className={styles.kart} aria-label="Canlı log">
+                <div className={styles.kartBaslik}>
+                  <h2>Canlı Log</h2>
+                  {durum.calisiyor && (
+                    <span className={styles.canliEtiket}>
+                      <span className={styles.rozetNokta} aria-hidden /> canlı
+                    </span>
+                  )}
+                </div>
+                <div className={styles.log} aria-live="polite">
+                  {durum.log.map((satir, i) => (
+                    <div key={i} className={satirSinifi(satir)}>
+                      {satir}
+                    </div>
+                  ))}
+                  {durum.calisiyor && <div className={styles.imlec}>▋</div>}
+                  <div ref={logSonu} />
+                </div>
+              </section>
+
+              {durum.hata && (
+                <p className={styles.hata} role="alert">
+                  Görev hatası: {durum.hata}
+                </p>
+              )}
+
+              {durum.sonuc && (durum.sonuc.plan || durum.sonuc.reviewer) && (
+                <section className={styles.kart}>
+                  <div className={styles.kartBaslik}>
+                    <h2>Raporlar</h2>
+                  </div>
+                  {durum.sonuc.plan && (
+                    <details>
+                      <summary>Plan</summary>
+                      <pre>{durum.sonuc.plan}</pre>
+                    </details>
+                  )}
+                  {durum.sonuc.reviewer && (
+                    <details open>
+                      <summary>Reviewer raporu</summary>
+                      <pre>{durum.sonuc.reviewer}</pre>
+                    </details>
+                  )}
+                </section>
+              )}
+            </>
+          )}
+
+          {!durum && (
+            <p className={styles.bilgi}>
+              API kapalı görünüyor. Başlatmak için: <code>uv run uvicorn orchestrator.api:app --port 8090</code>
+            </p>
+          )}
+        </main>
+
+        {/* ---- Sağ ray: özet + kaynak + dosyalar ---- */}
+        {durum?.gorev && (
+          <aside className={styles.ray}>
+            <section className={styles.kart} aria-label="Çalıştırma özeti">
+              <div className={styles.kartBaslik}>
+                <h2>Çalıştırma Özeti</h2>
+                <span
+                  className={`${styles.durumEtiketi} ${
+                    durumEtiketi === "Tamamlandı"
+                      ? styles.durumIyi
+                      : durumEtiketi === "Çalışıyor" || durumEtiketi === "Onay bekliyor"
+                        ? styles.durumAktif
+                        : durumEtiketi === "Boşta"
+                          ? ""
+                          : styles.durumKotu
+                  }`}
+                >
+                  {durumEtiketi}
+                </span>
+              </div>
+              <dl className={styles.ozet}>
+                <div>
+                  <dt>Klasör</dt>
+                  <dd className={styles.kodMetin}>{durum.klasor ?? "—"}</dd>
+                </div>
+                <div>
+                  <dt>Mod</dt>
+                  <dd>{durum.sonuc?.proje || durum.log.some((s) => s.includes("[decomposer]")) ? "Proje (zincir)" : "Tek görev"}</dd>
+                </div>
+                {durum.sonuc && !durum.sonuc.proje && (
+                  <div>
+                    <dt>Debug turu</dt>
+                    <dd>{durum.sonuc.debug_turu}</dd>
+                  </div>
+                )}
+                {durum.sonuc?.proje && durum.sonuc.entegrasyon && (
+                  <div>
+                    <dt>Entegrasyon</dt>
+                    <dd>{durum.sonuc.entegrasyon}</dd>
+                  </div>
+                )}
+                {durum.sonuc && (
+                  <div>
+                    <dt>Doğrulama</dt>
+                    <dd className={durum.sonuc.dogrulama_gecti ? styles.gecti : styles.kaldi}>
+                      {durum.sonuc.dogrulama_gecti ? "GEÇTİ" : "KALDI"}
+                    </dd>
+                  </div>
+                )}
+              </dl>
+            </section>
+
+            {k && k.istek > 0 && (
+              <section className={styles.kart} aria-label="Kaynak kullanımı">
+                <div className={styles.kartBaslik}>
+                  <h2>Kaynak Kullanımı</h2>
+                </div>
+                <div className={styles.kaynak}>
+                  <div
+                    className={styles.halka}
+                    style={{ background: `conic-gradient(var(--mor) 0deg ${girisAcisi}deg, var(--indigo) ${girisAcisi}deg 360deg)` }}
+                    role="img"
+                    aria-label={`Toplam ${tokenBicimle(toplamToken)} token`}
+                  >
+                    <div className={styles.halkaIc}>
+                      <strong>{tokenBicimle(toplamToken)}</strong>
+                      <span>token</span>
+                    </div>
+                  </div>
+                  <ul className={styles.kaynakListe}>
+                    <li>
+                      <span className={styles.noktaMor} aria-hidden /> Giriş: {tokenBicimle(k.girdi)}
+                    </li>
+                    <li>
+                      <span className={styles.noktaIndigo} aria-hidden /> Çıkış: {tokenBicimle(k.cikti)}
+                    </li>
+                    <li className={styles.kaynakIkincil}>İstek: {k.istek}</li>
+                  </ul>
+                </div>
+              </section>
+            )}
+
+            {dosyalar.length > 0 && (
+              <section className={styles.kart} aria-label="Çıktı dosyaları">
+                <div className={styles.kartBaslik}>
+                  <h2>Çıktı Dosyaları</h2>
+                  <span className={styles.karakterSayaci}>{dosyalar.length}</span>
+                </div>
+                <ul className={styles.dosyaListe}>
+                  {dosyalar.map((d) => (
+                    <li key={d}>
+                      <IkonDosya /> <span className={styles.kodMetin}>{d}</span>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
+          </aside>
+        )}
+      </div>
+    </div>
   );
 }

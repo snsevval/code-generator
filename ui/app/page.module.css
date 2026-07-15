@@ -1,10 +1,12 @@
-/* Orkestratör arayüzü — OLED koyu tema, yoğun panel düzeni (ui-ux-pro-max) */
+/* Orkestratör panosu — OLED koyu, mor/indigo aksan, yoğun kart düzeni (ui-ux-pro-max v2) */
 
-.ana {
-  max-width: 960px;
+.kabuk {
+  max-width: 1240px;
   margin: 0 auto;
   padding: var(--aralik-5) var(--aralik-4) var(--aralik-6);
 }
+
+/* --- Üst başlık --- */
 
 .baslik {
   display: flex;
@@ -15,11 +17,34 @@
   margin-bottom: var(--aralik-5);
 }
 
-.baslik h1 {
-  font-family: var(--font-kod), ui-monospace, monospace;
-  font-size: 1.25rem;
+.marka {
+  display: flex;
+  align-items: center;
+  gap: var(--aralik-3);
+}
+
+.markaLogo {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, var(--mor), var(--indigo));
+  color: #fff;
+  font-family: var(--font-kod), monospace;
+  font-size: 0.8rem;
   font-weight: 600;
-  letter-spacing: -0.02em;
+}
+
+.marka h1 {
+  font-size: 1.1rem;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+.marka p {
+  font-size: 0.78rem;
+  color: var(--metin-ikincil);
 }
 
 .rozetler {
@@ -47,8 +72,8 @@
 }
 
 .rozetIyi {
-  color: var(--aksan);
-  border-color: color-mix(in srgb, var(--aksan) 35%, transparent);
+  color: var(--basari);
+  border-color: color-mix(in srgb, var(--basari) 35%, transparent);
 }
 
 .rozetKotu {
@@ -56,27 +81,61 @@
   border-color: color-mix(in srgb, var(--tehlike) 35%, transparent);
 }
 
-/* --- Form --- */
+/* --- İzgara --- */
 
-.form {
+.izgara {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  gap: var(--aralik-4);
+  align-items: start;
+}
+
+@media (max-width: 900px) {
+  .izgara {
+    grid-template-columns: 1fr;
+  }
+}
+
+.anaKolon,
+.ray {
   display: flex;
   flex-direction: column;
+  gap: var(--aralik-4);
+  min-width: 0;
+}
+
+/* --- Kart --- */
+
+.kart {
+  border: 1px solid var(--kenar);
+  border-radius: 12px;
+  background: var(--yuzey);
+  padding: var(--aralik-4);
+}
+
+.kartBaslik {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   gap: var(--aralik-2);
-  margin-bottom: var(--aralik-5);
+  margin-bottom: var(--aralik-3);
 }
 
-.alanEtiketi {
-  font-size: 0.8rem;
-  font-weight: 500;
+.kartBaslik h2 {
+  font-size: 0.85rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.karakterSayaci {
+  font-size: 0.72rem;
   color: var(--metin-ikincil);
+  font-variant-numeric: tabular-nums;
 }
 
-.alanEtiketi em {
-  color: var(--aksan);
-  font-style: normal;
-}
+/* --- Form --- */
 
-.form textarea {
+.kart textarea {
   width: 100%;
   padding: var(--aralik-3);
   border-radius: 8px;
@@ -89,42 +148,53 @@
   transition: border-color 200ms ease-out;
 }
 
-.form textarea:hover {
+.kart textarea:hover {
   border-color: var(--kenar-belirgin);
 }
 
 .formAlt {
   display: flex;
   align-items: center;
-  gap: var(--aralik-4);
+  gap: var(--aralik-2);
   flex-wrap: wrap;
+  margin-top: var(--aralik-3);
 }
 
 .formAlt select {
   padding: var(--aralik-2) var(--aralik-3);
-  border-radius: 6px;
+  border-radius: 8px;
   border: 1px solid var(--kenar);
   background: var(--yuzey-koyu);
   color: inherit;
   font: inherit;
-  font-size: 0.85rem;
+  font-size: 0.82rem;
   cursor: pointer;
   min-height: 44px;
 }
 
-.onayKutusu {
+.anahtar {
   display: inline-flex;
   align-items: center;
   gap: var(--aralik-2);
-  font-size: 0.85rem;
-  cursor: pointer;
+  padding: 0 var(--aralik-3);
   min-height: 44px;
+  border-radius: 8px;
+  border: 1px solid var(--kenar);
+  background: var(--yuzey-koyu);
+  font-size: 0.82rem;
+  cursor: pointer;
+  transition: border-color 150ms ease-out, color 150ms ease-out;
 }
 
-.onayKutusu input {
-  width: 16px;
-  height: 16px;
-  accent-color: var(--aksan);
+.anahtarAcik {
+  border-color: color-mix(in srgb, var(--mor) 55%, transparent);
+  color: var(--mor-acik);
+}
+
+.anahtar input {
+  width: 15px;
+  height: 15px;
+  accent-color: var(--mor);
   cursor: pointer;
 }
 
@@ -137,17 +207,17 @@
   min-height: 44px;
   border-radius: 8px;
   border: none;
-  background: var(--aksan);
-  color: var(--aksan-koyu);
+  background: linear-gradient(135deg, var(--mor), var(--indigo));
+  color: #fff;
   font: inherit;
-  font-size: 0.9rem;
+  font-size: 0.88rem;
   font-weight: 600;
   cursor: pointer;
   transition: filter 150ms ease-out, transform 150ms ease-out;
 }
 
 .formAlt button:hover:not(:disabled) {
-  filter: brightness(1.1);
+  filter: brightness(1.15);
 }
 
 .formAlt button:active:not(:disabled) {
@@ -159,53 +229,84 @@
   cursor: not-allowed;
 }
 
-/* --- Çalışma paneli --- */
+/* --- Akış şeridi --- */
 
-.panel {
-  border: 1px solid var(--kenar);
-  border-radius: 10px;
-  background: var(--yuzey-koyu);
-  padding: var(--aralik-4);
-}
-
-.gorevBasligi {
-  display: flex;
-  align-items: center;
+.akis {
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
   gap: var(--aralik-2);
-  font-size: 0.9rem;
-  font-weight: 500;
-  color: var(--metin-ikincil);
-  margin-bottom: var(--aralik-3);
 }
 
-.kullanim {
-  font-family: var(--font-kod), ui-monospace, monospace;
-  font-size: 0.72rem;
-  color: var(--metin-ikincil);
-  margin: calc(-1 * var(--aralik-2)) 0 var(--aralik-3);
-  font-variant-numeric: tabular-nums;
-}
-
-.spinner {
-  animation: don 0.9s linear infinite;
-  color: var(--aksan);
-  flex-shrink: 0;
-}
-
-@keyframes don {
-  to {
-    transform: rotate(360deg);
+@media (max-width: 700px) {
+  .akis {
+    grid-template-columns: 1fr;
   }
 }
 
-/* --- Alt görev listesi (proje modu) --- */
+.akisAdimi {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--aralik-1);
+  padding: var(--aralik-3);
+  border-radius: 10px;
+  border: 1px solid var(--kenar);
+  background: var(--yuzey-koyu);
+  transition: border-color 200ms ease-out;
+}
+
+.akisAdimi[data-durum="calisiyor"] {
+  border-color: var(--mor);
+  box-shadow: 0 0 12px color-mix(in srgb, var(--mor) 25%, transparent);
+}
+
+.akisAdimi[data-durum="tamam"] {
+  border-color: color-mix(in srgb, var(--basari) 35%, transparent);
+}
+
+.akisNumara {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--soluk);
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--metin-ikincil);
+}
+
+.akisAdimi[data-durum="calisiyor"] .akisNumara {
+  background: transparent;
+  color: var(--mor-acik);
+}
+
+.akisAd {
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.akisDurum {
+  font-size: 0.68rem;
+  color: var(--metin-ikincil);
+}
+
+.akisAdimi[data-durum="calisiyor"] .akisDurum {
+  color: var(--mor-acik);
+}
+
+.akisAdimi[data-durum="tamam"] .akisDurum {
+  color: var(--basari);
+}
+
+/* --- Alt görevler --- */
 
 .altGorevler {
   list-style: none;
   display: flex;
   flex-direction: column;
   gap: var(--aralik-1);
-  margin-bottom: var(--aralik-3);
 }
 
 .altGorev {
@@ -213,8 +314,8 @@
   align-items: center;
   gap: var(--aralik-2);
   padding: var(--aralik-2) var(--aralik-3);
-  border-radius: 6px;
-  background: var(--soluk);
+  border-radius: 8px;
+  background: var(--yuzey-koyu);
   font-size: 0.82rem;
 }
 
@@ -240,72 +341,34 @@
   color: var(--metin-ikincil);
 }
 
-/* --- Onay paneli (adım adım onaylı proje modu) --- */
-
-.onayPaneli {
-  display: flex;
-  align-items: center;
-  gap: var(--aralik-4);
-  flex-wrap: wrap;
-  margin-bottom: var(--aralik-3);
-  padding: var(--aralik-3);
-  border-radius: 8px;
-  border: 1px solid color-mix(in srgb, var(--aksan) 40%, transparent);
-  background: color-mix(in srgb, var(--aksan) 8%, transparent);
-  font-size: 0.85rem;
-}
-
-.onayPaneli p {
-  flex: 1;
-  min-width: 200px;
-}
-
-.onayButonlari {
-  display: flex;
-  gap: var(--aralik-2);
-}
-
-.onayButonlari button {
-  min-height: 44px;
-  padding: 0 var(--aralik-4);
-  border-radius: 8px;
-  border: none;
-  background: var(--aksan);
-  color: var(--aksan-koyu);
-  font: inherit;
-  font-size: 0.85rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: filter 150ms ease-out;
-}
-
-.onayButonlari button:hover {
-  filter: brightness(1.1);
-}
-
-.durdurButonu {
-  background: transparent !important;
-  color: var(--tehlike) !important;
-  border: 1px solid color-mix(in srgb, var(--tehlike) 50%, transparent) !important;
-}
-
 /* --- Canlı log --- */
 
+.canliEtiket {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.72rem;
+  color: var(--basari);
+}
+
+.canliEtiket .rozetNokta {
+  animation: yanip-son 1.2s ease-in-out infinite;
+}
+
 .log {
-  background: #0a0f1e;
+  background: #070b14;
   border: 1px solid var(--kenar);
   border-radius: 8px;
   padding: var(--aralik-3);
-  max-height: 400px;
+  max-height: 380px;
   overflow-y: auto;
   font-family: var(--font-kod), ui-monospace, monospace;
-  font-size: 0.78rem;
-  line-height: 1.6;
+  font-size: 0.76rem;
+  line-height: 1.65;
   white-space: pre-wrap;
   word-break: break-word;
 }
 
-/* Ajan renkleri (koyu zeminde 4.5:1 üzeri) */
 .planner {
   color: #93c5fd;
 }
@@ -341,46 +404,70 @@
   }
 }
 
-/* --- Hata ve sonuç --- */
+/* --- Onay paneli --- */
+
+.onayPaneli {
+  display: flex;
+  align-items: center;
+  gap: var(--aralik-4);
+  flex-wrap: wrap;
+  padding: var(--aralik-3) var(--aralik-4);
+  border-radius: 12px;
+  border: 1px solid color-mix(in srgb, var(--mor) 45%, transparent);
+  background: color-mix(in srgb, var(--mor) 10%, transparent);
+  font-size: 0.85rem;
+}
+
+.onayPaneli p {
+  flex: 1;
+  min-width: 200px;
+}
+
+.onayButonlari {
+  display: flex;
+  gap: var(--aralik-2);
+}
+
+.onayButonlari button {
+  min-height: 44px;
+  padding: 0 var(--aralik-4);
+  border-radius: 8px;
+  border: none;
+  background: var(--mor);
+  color: #fff;
+  font: inherit;
+  font-size: 0.84rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: filter 150ms ease-out;
+}
+
+.onayButonlari button:hover {
+  filter: brightness(1.15);
+}
+
+.durdurButonu {
+  background: transparent !important;
+  color: var(--tehlike) !important;
+  border: 1px solid color-mix(in srgb, var(--tehlike) 50%, transparent) !important;
+}
+
+/* --- Hata, raporlar --- */
 
 .hata {
-  margin-top: var(--aralik-3);
   padding: var(--aralik-2) var(--aralik-3);
-  border-radius: 6px;
+  border-radius: 8px;
   border: 1px solid color-mix(in srgb, var(--tehlike) 40%, transparent);
   background: color-mix(in srgb, var(--tehlike) 12%, transparent);
   color: #fca5a5;
   font-size: 0.82rem;
 }
 
-.sonuc {
-  margin-top: var(--aralik-3);
-  padding: var(--aralik-3);
-  border: 1px solid var(--kenar);
-  border-radius: 8px;
-  background: var(--yuzey);
+.kart details {
+  margin-top: var(--aralik-2);
 }
 
-.sonucOzeti {
-  display: flex;
-  align-items: center;
-  gap: var(--aralik-2);
-  font-size: 0.85rem;
-}
-
-.gecti {
-  color: var(--aksan);
-}
-
-.kaldi {
-  color: var(--tehlike);
-}
-
-.sonuc details {
-  margin-top: var(--aralik-3);
-}
-
-.sonuc summary {
+.kart summary {
   cursor: pointer;
   font-weight: 500;
   font-size: 0.82rem;
@@ -388,19 +475,191 @@
   transition: color 150ms ease-out;
 }
 
-.sonuc summary:hover {
+.kart summary:hover {
   color: var(--metin);
 }
 
-.sonuc pre {
+.kart pre {
   margin-top: var(--aralik-2);
   padding: var(--aralik-3);
-  background: #0a0f1e;
-  border-radius: 6px;
+  background: #070b14;
+  border-radius: 8px;
   overflow-x: auto;
-  font-size: 0.78rem;
+  font-size: 0.76rem;
   white-space: pre-wrap;
   word-break: break-word;
+  font-family: var(--font-kod), ui-monospace, monospace;
+}
+
+/* --- Sağ ray: özet --- */
+
+.durumEtiketi {
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  background: var(--soluk);
+  color: var(--metin-ikincil);
+}
+
+.durumIyi {
+  background: color-mix(in srgb, var(--basari) 15%, transparent);
+  color: var(--basari);
+}
+
+.durumAktif {
+  background: color-mix(in srgb, var(--mor) 18%, transparent);
+  color: var(--mor-acik);
+}
+
+.durumKotu {
+  background: color-mix(in srgb, var(--tehlike) 15%, transparent);
+  color: var(--tehlike);
+}
+
+.ozet {
+  display: flex;
+  flex-direction: column;
+  gap: var(--aralik-2);
+}
+
+.ozet > div {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--aralik-2);
+  font-size: 0.8rem;
+}
+
+.ozet dt {
+  color: var(--metin-ikincil);
+  flex-shrink: 0;
+}
+
+.ozet dd {
+  text-align: right;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.kodMetin {
+  font-family: var(--font-kod), ui-monospace, monospace;
+  font-size: 0.9em;
+}
+
+.gecti {
+  color: var(--basari);
+  font-weight: 600;
+}
+
+.kaldi {
+  color: var(--tehlike);
+  font-weight: 600;
+}
+
+/* --- Kaynak halkası --- */
+
+.kaynak {
+  display: flex;
+  align-items: center;
+  gap: var(--aralik-4);
+}
+
+.halka {
+  width: 96px;
+  height: 96px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+
+.halkaIc {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  background: var(--yuzey);
+  display: grid;
+  place-content: center;
+  text-align: center;
+}
+
+.halkaIc strong {
+  font-size: 0.95rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.halkaIc span {
+  font-size: 0.65rem;
+  color: var(--metin-ikincil);
+}
+
+.kaynakListe {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--aralik-1);
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.kaynakListe li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.noktaMor,
+.noktaIndigo {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.noktaMor {
+  background: var(--mor);
+}
+
+.noktaIndigo {
+  background: var(--indigo);
+}
+
+.kaynakIkincil {
+  color: var(--metin-ikincil);
+}
+
+/* --- Dosya listesi --- */
+
+.dosyaListe {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--aralik-2);
+}
+
+.dosyaListe li {
+  display: flex;
+  align-items: center;
+  gap: var(--aralik-2);
+  font-size: 0.8rem;
+  min-width: 0;
+}
+
+.dosyaListe li span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.spinner {
+  animation: don 0.9s linear infinite;
+  color: var(--mor-acik);
+  flex-shrink: 0;
+}
+
+@keyframes don {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .bilgi {
@@ -413,5 +672,5 @@
   background: var(--soluk);
   padding: 2px 6px;
   border-radius: 4px;
-  font-size: 0.8em;
+  font-size: 0.85em;
 }
