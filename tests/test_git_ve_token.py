@@ -16,7 +16,7 @@ from orchestrator.git_deposu import GitDeposu
 from orchestrator.llm_client import LLMIstemcisi
 from orchestrator.loop import Orkestrator
 
-from tests.test_orchestrator import FakeIstemci, metin_cevap
+from tests.test_orchestrator import FakeIstemci, metin_cevap, validator_cevaplari
 
 git_gerekli = pytest.mark.skipif(shutil.which("git") is None, reason="git kurulu değil")
 
@@ -61,12 +61,11 @@ def test_fcc_git_kapatir(tmp_path, monkeypatch):
 
 @git_gerekli
 def test_gorev_sonunda_otomatik_commit(tmp_path):
-    senaryo = [
-        metin_cevap("plan"),
-        metin_cevap("kod"),
-        metin_cevap(BASARI_ISARETI),
-        metin_cevap("rapor"),
-    ]
+    senaryo = (
+        [metin_cevap("plan"), metin_cevap("kod")]
+        + validator_cevaplari(BASARI_ISARETI)
+        + [metin_cevap("rapor")]
+    )
     ws = tmp_path / "ws"
     ws.mkdir()
     ork = Orkestrator(
@@ -119,12 +118,11 @@ def test_asama_loglari_token_deltasi_icerir(tmp_path):
             self.kullanim["cikti"] += 10
             return super().mesaj_gonder(**kwargs)
 
-    senaryo = [
-        metin_cevap("plan"),
-        metin_cevap("kod"),
-        metin_cevap(BASARI_ISARETI),
-        metin_cevap("rapor"),
-    ]
+    senaryo = (
+        [metin_cevap("plan"), metin_cevap("kod")]
+        + validator_cevaplari(BASARI_ISARETI)
+        + [metin_cevap("rapor")]
+    )
     loglar: list[str] = []
     ws = tmp_path / "ws"
     ws.mkdir()

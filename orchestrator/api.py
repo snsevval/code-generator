@@ -21,6 +21,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
+from orchestrator.calisma_alani import gorev_klasoru_sec
 from orchestrator.llm_client import VARSAYILAN_PROXY_URL
 from orchestrator.loop import Orkestrator
 from orchestrator.proje import ProjeOrkestratoru
@@ -67,6 +68,8 @@ class _Durum:
         self.onay_karari = False
         # Koşan orkestratörün LLM istemcisi (token sayacı buradan okunur)
         self.istemci = None
+        # Görevin izole çalışma klasörü (UI'de gösterilir)
+        self.klasor: str | None = None
 
 
 DURUM = _Durum()
@@ -77,8 +80,10 @@ def _gorev_kos(istek: GorevIstegi) -> None:
     try:
         if istek.model:
             os.environ["FCC_MODEL"] = istek.model
-        ws = Path(os.environ.get("FCC_WORKSPACE", "workspace")).resolve()
-        ws.mkdir(parents=True, exist_ok=True)
+        taban = Path(os.environ.get("FCC_WORKSPACE", "workspace")).resolve()
+        # Görev başına izole klasör: eski görevlerin dosyaları yenisine sızmasın
+        ws = gorev_klasoru_sec(taban, devam=istek.devam, proje=istek.proje)
+        DURUM.klasor = f"{taban.name}/{ws.name}"
         runner = DockerShellRunner(ws) if istek.docker else None
         log = lambda satir: DURUM.log.append(satir)  # noqa: E731
         ork = ORKESTRATOR_FABRIKASI(ws, ToolExecutor(ws, shell_runner=runner), log)
@@ -162,6 +167,7 @@ def durum():
         "sonuc": DURUM.sonuc,
         "onay_bekleyen": DURUM.onay_bekleyen,
         "kullanim": getattr(DURUM.istemci, "kullanim", None),
+        "klasor": DURUM.klasor,
     }
 
 

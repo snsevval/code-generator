@@ -15,7 +15,7 @@ from orchestrator.loop import Orkestrator, OrkestrasyonHatasi
 from orchestrator.proje import ProjeOrkestratoru, _json_dizisi_ayikla
 from orchestrator.state import ProjeState
 
-from tests.test_orchestrator import FakeIstemci, metin_cevap
+from tests.test_orchestrator import FakeIstemci, metin_cevap, tool_cevap
 
 
 def proje_kur(tmp_path, senaryo, onay_callback=None):
@@ -37,18 +37,24 @@ def bolme_cevabi(*gorevler: str) -> dict:
     return metin_cevap(json.dumps(veri, ensure_ascii=False))
 
 
+def dogrulama_cevaplari(isaret: str) -> list[dict]:
+    """Kanıt şartını sağlayan validator cevabı: araç çağrısı + karar."""
+    return [tool_cevap("list_files", {}, "tv"), metin_cevap(isaret)]
+
+
 def ic_dongu(gecti: bool = True) -> list[dict]:
     """Tek alt görevin iç döngüsü: planner→codegen→validator→reviewer."""
     isaret = BASARI_ISARETI if gecti else BASARISIZLIK_ISARETI
     cevaplar = [
         metin_cevap("plan"),
         metin_cevap("kodu yazdım"),
-        metin_cevap(isaret),
-    ]
+    ] + dogrulama_cevaplari(isaret)
     if not gecti:
         # başarısızsa debugger↔validator 3 tur döner, sonra reviewer
         for _ in range(3):
-            cevaplar += [metin_cevap("düzeltme"), metin_cevap(BASARISIZLIK_ISARETI)]
+            cevaplar += [metin_cevap("düzeltme")] + dogrulama_cevaplari(
+                BASARISIZLIK_ISARETI
+            )
     cevaplar.append(metin_cevap("rapor"))
     return cevaplar
 
@@ -78,7 +84,7 @@ def test_mutlu_yol_iki_alt_gorev(tmp_path):
         [bolme_cevabi("modeli yaz", "cli yaz")]
         + ic_dongu()
         + ic_dongu()
-        + [metin_cevap(BASARI_ISARETI)]  # final entegrasyon doğrulaması
+        + dogrulama_cevaplari(BASARI_ISARETI)  # final entegrasyon doğrulaması
     )
     proje, istemci = proje_kur(tmp_path, senaryo)
 
@@ -88,7 +94,7 @@ def test_mutlu_yol_iki_alt_gorev(tmp_path):
     assert all(a["ozet"] == "kodu yazdım" for a in state.alt_gorevler)
     assert state.entegrasyon == "basarili"
     # İkinci alt görevin girdisinde birincinin özeti taşınmalı
-    ikinci_girdi = istemci.istekler[5]["messages"][0]["content"]
+    ikinci_girdi = istemci.istekler[6]["messages"][0]["content"]
     assert "modeli yaz: kodu yazdım" in ikinci_girdi
     assert "Workspace'teki mevcut dosyalar" in ikinci_girdi
     # Entegrasyon isteği bütünü vurgulamalı
@@ -97,7 +103,7 @@ def test_mutlu_yol_iki_alt_gorev(tmp_path):
 
 
 def test_entegrasyon_basarisiz_kaydedilir(tmp_path):
-    senaryo = [bolme_cevabi("a")] + ic_dongu() + [metin_cevap(BASARISIZLIK_ISARETI)]
+    senaryo = [bolme_cevabi("a")] + ic_dongu() + dogrulama_cevaplari(BASARISIZLIK_ISARETI)
     proje, _ = proje_kur(tmp_path, senaryo)
     state = proje.hedef_calistir("hedef")
     assert state.alt_gorevler[0]["durum"] == "basarili"
@@ -135,7 +141,7 @@ def test_onay_callback_devamda_zincir_tamamlanir(tmp_path):
         return True
 
     senaryo = (
-        [bolme_cevabi("a", "b")] + ic_dongu() + ic_dongu() + [metin_cevap(BASARI_ISARETI)]
+        [bolme_cevabi("a", "b")] + ic_dongu() + ic_dongu() + dogrulama_cevaplari(BASARI_ISARETI)
     )
     proje, _ = proje_kur(tmp_path, senaryo, onay_callback=onay)
     state = proje.hedef_calistir("hedef")
@@ -164,7 +170,7 @@ def test_devam_basarili_alt_gorevleri_atlar(tmp_path):
     # İç döngü state'i temizlenir ki alt görev baştan denensin.
     for f in (tmp_path / "st").glob("alt_*.json"):
         f.unlink()
-    proje2, istemci2 = proje_kur(tmp_path, ic_dongu() + [metin_cevap(BASARI_ISARETI)])
+    proje2, istemci2 = proje_kur(tmp_path, ic_dongu() + dogrulama_cevaplari(BASARI_ISARETI))
     proje2.state_klasoru = proje.state_klasoru
 
     state = proje2.hedef_calistir("hedef", devam=True)
@@ -188,7 +194,7 @@ def test_gorev_metni_sabitlenir_ve_devamda_ayni_kalir(tmp_path):
     (proje.ork.executor.workspace / "sonradan.txt").write_text("x", encoding="utf-8")
     for f in (tmp_path / "st").glob("alt_*.json"):
         f.unlink()
-    proje2, istemci2 = proje_kur(tmp_path, ic_dongu() + [metin_cevap(BASARI_ISARETI)])
+    proje2, istemci2 = proje_kur(tmp_path, ic_dongu() + dogrulama_cevaplari(BASARI_ISARETI))
     proje2.state_klasoru = proje.state_klasoru
     proje2.hedef_calistir("hedef", devam=True)
 
@@ -226,7 +232,7 @@ def test_tikanan_alt_gorev_zinciri_duzgun_durdurur(tmp_path):
 def test_farkli_hedef_sifirdan_bolunur(tmp_path):
     eski = ProjeState(hedef="eski hedef", alt_gorevler=[{"id": 1, "gorev": "x", "kabul": "", "durum": "basarili", "ozet": ""}])
     proje, istemci = proje_kur(
-        tmp_path, [bolme_cevabi("yeni iş")] + ic_dongu() + [metin_cevap(BASARI_ISARETI)]
+        tmp_path, [bolme_cevabi("yeni iş")] + ic_dongu() + dogrulama_cevaplari(BASARI_ISARETI)
     )
     eski.kaydet(proje.proje_state_yolu)
 

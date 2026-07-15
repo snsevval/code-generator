@@ -172,13 +172,22 @@ class ProjeOrkestratoru:
 
         self._yaz("[proje] final entegrasyon doğrulaması başlıyor...")
         liste = "\n".join(f"- [{a['id']}] {a['gorev']}" for a in state.alt_gorevler)
-        cikti = self.ork.ajan_calistir(
-            AJANLAR["validator"],
+        istek = (
             f"Proje hedefi: {state.hedef}\n\nTamamlanan alt görevler:\n{liste}\n\n"
             "Parçaların BİRLİKTE çalıştığını uçtan uca doğrula: tüm testleri koş "
             "(pytest) ve ana kullanım akışını gerçekten dene. Tek tek modüller değil, "
-            "bütün önemli.",
+            "bütün önemli."
         )
+        cikti = self.ork.ajan_calistir(AJANLAR["validator"], istek)
+        # Kanıt şartı: entegrasyon kararı da araç çalıştırmadan verilemez
+        if getattr(self.ork, "son_arac_sayisi", 1) == 0:
+            self._yaz("[proje] entegrasyon kararı kanıtsız → yeniden isteniyor")
+            cikti = self.ork.ajan_calistir(
+                AJANLAR["validator"],
+                istek
+                + "\n\nÖNEMLİ: Önceki cevabın reddedildi çünkü hiçbir araç çağırmadan "
+                "karar verdin. Testleri GERÇEKTEN çalıştırıp kanıta dayan.",
+            )
         gecti = self.ork.dogrulamayi_coz(cikti)
         state.entegrasyon = "basarili" if gecti else "basarisiz"
         state.kaydet(self.proje_state_yolu)

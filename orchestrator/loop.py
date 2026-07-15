@@ -11,6 +11,7 @@ diske yazılır (kesinti sonrası devam için).
 
 from __future__ import annotations
 
+import json
 import re
 from pathlib import Path
 
@@ -36,6 +37,15 @@ _YIKICI_KABUK = re.compile(
     r"(^|[\s&|;(])(del|erase|rd|rmdir|rm|move|mv|ren|rename|copy|cp)\b|>{1,2}",
     re.IGNORECASE,
 )
+
+# Aynı araç + aynı girdi bu kadar kez tekrarlanırsa çalıştırılmaz (döngü kırıcı);
+# araya write_file girince sayaç sıfırlanır (düzelt-doğrula döngüsü meşrudur)
+MAX_AYNI_CAGRI = 2
+
+# Şema uyarısı için: araç adı → geçerli parametre adları
+_ARAC_PARAMETRELERI = {
+    t["name"]: set(t["input_schema"].get("properties", {})) for t in TOOL_TANIMLARI
+}
 
 
 class OrkestrasyonHatasi(RuntimeError):
@@ -85,6 +95,9 @@ class Orkestrator:
         self.istemci = istemci or LLMIstemcisi()
         self.state_yolu = Path(state_yolu)
         self._log = log
+        # Son ajan_calistir çağrısında gerçekten yürütülen araç sayısı
+        # (kanıt şartı: doğrulama kararları araçsız kabul edilmez)
+        self.son_arac_sayisi = 0
         # git=True: otomatik kur (FCC_GIT=0 veya git yoksa sessizce kapalı),
         # git=False/None: kapalı, GitDeposu örneği: onu kullan
         if git is True:
@@ -105,6 +118,8 @@ class Orkestrator:
         """Ajanı, tool çağrıları çözülene dek çalıştırır; nihai metnini döndürür."""
         araclar = [t for t in TOOL_TANIMLARI if t["name"] in ajan.araclar]
         mesajlar: list[dict] = [{"role": "user", "content": gorev_metni}]
+        self.son_arac_sayisi = 0
+        tekrar_sayaci: dict[tuple, int] = {}
 
         for _ in range(MAX_TOOL_TURU):
             _gecmisi_kirp(mesajlar)
@@ -127,9 +142,24 @@ class Orkestrator:
             for blok in tool_bloklari:
                 self._yaz(f"    [{ajan.ad}] araç: {blok['name']}({blok.get('input', {})})")
                 girdi = blok.get("input") or {}
+                anahtar = (
+                    blok["name"],
+                    json.dumps(girdi, sort_keys=True, ensure_ascii=False, default=str),
+                )
+                tekrar_sayaci[anahtar] = tekrar_sayaci.get(anahtar, 0) + 1
+                # Döngü kırıcı: durum değişmeden aynı çağrıyı yinelemek anlamsız
+                # (canlıda debugger aynı dosyayı 7 kez okuyup 25 turu tüketti)
+                if tekrar_sayaci[anahtar] > MAX_AYNI_CAGRI:
+                    sonuc = ToolSonucu(
+                        False,
+                        f"HATA: {blok['name']} aracını aynı girdiyle zaten "
+                        f"{MAX_AYNI_CAGRI} kez çağırdın; dosyalar değişmeden sonuç da "
+                        "değişmez. Yaklaşımını değiştir: farklı bir şey dene veya "
+                        "elindeki bilgiyle sonucu raporla.",
+                    )
                 # Rol kısıtı: bazı ajanlar (validator) mevcut dosyayı değiştiremez —
                 # promptla değil mekanik olarak engellenir
-                if (
+                elif (
                     blok["name"] == "write_file"
                     and ajan.mevcut_dosyayi_degistiremez
                     and self.executor.dosya_var_mi(girdi.get("path", ""))
@@ -153,6 +183,23 @@ class Orkestrator:
                     )
                 else:
                     sonuc = self.executor.calistir(blok["name"], girdi)
+                    self.son_arac_sayisi += 1
+                    if blok["name"] == "write_file" and sonuc.ok:
+                        # Durum değişti: bundan sonraki tekrarlar meşru
+                        # (düzelt → yeniden test et döngüsü)
+                        tekrar_sayaci.clear()
+
+                # Şema uyarısı: bilinmeyen parametre sessizce yutulmasın, model
+                # kendini düzeltebilsin (canlıda search_files'a 'path' verildi)
+                bilinmeyen = set(girdi) - _ARAC_PARAMETRELERI.get(blok["name"], set(girdi))
+                if bilinmeyen:
+                    gecerli = ", ".join(sorted(_ARAC_PARAMETRELERI[blok["name"]]))
+                    sonuc = ToolSonucu(
+                        sonuc.ok,
+                        sonuc.cikti
+                        + f"\n[not: {', '.join(sorted(bilinmeyen))} diye parametre yok, "
+                        f"yok sayıldı; geçerli parametreler: {gecerli}]",
+                    )
                 sonuc_bloklari.append(
                     {
                         "type": "tool_result",
@@ -164,7 +211,9 @@ class Orkestrator:
             mesajlar.append({"role": "user", "content": sonuc_bloklari})
 
         raise OrkestrasyonHatasi(
-            f"{ajan.ad} ajanı {MAX_TOOL_TURU} tool turunda görevi bitiremedi"
+            f"{ajan.ad} ajanı {MAX_TOOL_TURU} tool turunda görevi bitiremedi "
+            "(model büyük olasılıkla ilerleme kaydedemiyor; logdaki son araç "
+            "çağrılarına bakın)"
         )
 
     # --- Aşamalar ---
@@ -202,6 +251,38 @@ class Orkestrator:
             "işareti yok; çıktı:\n" + cikti[-500:]
         )
 
+    def _kanitli_dogrulama(self, state: OturumState, metin: str) -> str:
+        """Validator aşamasını koşar; kanıtsız kararı bir kez reddedip yeniden ister.
+
+        Kanıt = o turda en az bir aracın gerçekten çalıştırılmış olması. Canlıda
+        validator hiç araç çağırmadan (12k token düşünüp) hüküm verdi ve debugger
+        var olmayan hatayı kovaladı; bu kural her iki yöndeki (BAŞARILI/BAŞARISIZ)
+        kanıtsız kararı da keser.
+        """
+        onceden_tamam = "validator" in state.tamamlanan
+        cikti = self._asama(state, "validator", metin)
+        if onceden_tamam or self.son_arac_sayisi > 0:
+            return cikti
+
+        self._yaz(
+            "[orkestratör] validator hiç araç çalıştırmadan karar verdi → "
+            "reddedildi, kanıt isteniyor"
+        )
+        state.tamamlanan.remove("validator")
+        cikti = self._asama(
+            state,
+            "validator",
+            metin
+            + "\n\nÖNEMLİ: Önceki cevabın reddedildi çünkü hiçbir araç çağırmadan "
+            "karar verdin. Önce testleri/komutları GERÇEKTEN çalıştır, çıktılarını "
+            "gör ve kararını bu kanıta dayandır.",
+        )
+        if self.son_arac_sayisi == 0:
+            raise OrkestrasyonHatasi(
+                "validator iki denemede de kanıt (araç çağrısı) olmadan karar verdi"
+            )
+        return cikti
+
     def dogrulamayi_coz(self, dogrulama: str) -> bool:
         """Doğrulama çıktısını yorumlar; işaret unutulmuşsa bir kez netleştirir.
 
@@ -237,10 +318,8 @@ class Orkestrator:
         self._asama(
             state, "codegen", f"Görev: {gorev}\n\nUygulanacak plan:\n{plan}"
         )
-        dogrulama = self._asama(
-            state,
-            "validator",
-            f"Görev: {gorev}\n\nPlan:\n{plan}\n\nÜretilen işi doğrula.",
+        dogrulama = self._kanitli_dogrulama(
+            state, f"Görev: {gorev}\n\nPlan:\n{plan}\n\nÜretilen işi doğrula."
         )
 
         # Başarısızsa debugger ↔ validator döngüsü
@@ -260,9 +339,8 @@ class Orkestrator:
             # Doğrulamayı yeniden koş (önceki sonucu geçersiz kıl)
             if "validator" in state.tamamlanan:
                 state.tamamlanan.remove("validator")
-            dogrulama = self._asama(
+            dogrulama = self._kanitli_dogrulama(
                 state,
-                "validator",
                 f"Görev: {gorev}\n\nPlan:\n{plan}\n\nDüzeltme sonrası işi yeniden doğrula.",
             )
             gecti = self.dogrulamayi_coz(dogrulama)

@@ -12,6 +12,7 @@ import argparse
 import sys
 from pathlib import Path
 
+from orchestrator.calisma_alani import gorev_klasoru_sec
 from orchestrator.loop import Orkestrator
 from orchestrator.proje import ProjeOrkestratoru
 from orchestrator.tool_executor import DockerShellRunner, ToolExecutor
@@ -42,8 +43,9 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    workspace = Path(args.workspace).resolve()
-    workspace.mkdir(parents=True, exist_ok=True)
+    # Görev başına izole klasör (--workspace kök sayılır; --devam sonuncuyu sürdürür)
+    workspace = gorev_klasoru_sec(Path(args.workspace), devam=args.devam, proje=args.proje)
+    print(f"Çalışma klasörü: {workspace}")
     runner = DockerShellRunner(workspace) if args.docker else None
     executor = ToolExecutor(workspace, shell_runner=runner)
     orkestrator = Orkestrator(workspace, executor=executor)

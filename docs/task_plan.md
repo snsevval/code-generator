@@ -127,6 +127,20 @@ rol kısıtları) ve yeterli kota.
       ajan değişiklikleri tarihçede izlenir, geri alınabilir; `FCC_GIT=0` kapatır
 - [x] **Token sayacı**: LLM istemcisi kullanım biriktirir; aşama loglarında delta,
       CLI özetinde ve arayüzde (canlı) toplam giriş/çıkış token + istek sayısı
+- [x] **Görev başına izole klasör** (`orchestrator/calisma_alani.py`): her görev
+      `workspace/gorev-*` altında temiz başlar (canlıda eski dosyalar yeni görevin
+      doğrulamasını kirletmişti); `--devam` son klasörü sürdürür; UI klasörü gösterir
+- [x] **Kanıt şartı**: validator (ve entegrasyon) kararı, o turda en az bir araç
+      çalıştırılmadan kabul edilmez — kanıtsız karar bir kez reddedilir, ikincide hata
+      (canlıda 12.7k token düşünüp sıfır komutla hüküm verilmişti)
+- [x] **Tekrar kilidi**: aynı araç + aynı girdi 3. kez çalıştırılmaz ("yaklaşımını
+      değiştir" hatası döner); write_file sayacı sıfırlar (düzelt-doğrula meşru)
+- [x] **Şema uyarısı**: bilinmeyen araç parametresi sessizce yutulmaz, geçerli
+      parametre listesiyle nota çevrilir (canlıda search_files'a 'path' verilmişti)
+- [x] **Debugger çıkış kapısı** (prompt): hatayı yeniden üretemiyorsa dosya
+      değiştirmeden "hata yeniden üretilemedi" raporlar
+- [x] Thinking deneyi: proxy'de ENABLE_MODEL_THINKING=false yapıldı (Nemotron'un
+      12.7k token'lık düşünme seansları kotayı eritiyordu) — kalite düşerse geri açılır
 - [ ] Görev kuyruğu (API'de aynı anda tek görev sınırının ötesi)
 - [ ] Docker sandbox'ı varsayılan yapmak
 - [ ] Güçlü/ücretli model karşılaştırması

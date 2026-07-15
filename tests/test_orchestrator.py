@@ -38,6 +38,11 @@ class FakeIstemci:
         return self.senaryo.pop(0)
 
 
+def validator_cevaplari(karar_metni: str) -> list[dict]:
+    """Kanıt şartını sağlayan validator cevabı: bir araç çağrısı + karar."""
+    return [tool_cevap("list_files", {}, "tv_kanit"), metin_cevap(karar_metni)]
+
+
 def orkestrator_kur(tmp_path, senaryo):
     istemci = FakeIstemci(senaryo)
     ws = tmp_path / "ws"
@@ -188,48 +193,49 @@ def test_ajan_sonsuz_tool_dongusunde_durdurulur(tmp_path):
 
 
 def test_mutlu_yol_ajan_sirasi(tmp_path):
-    senaryo = [
-        metin_cevap("1. adım: a.py yaz"),  # planner
-        metin_cevap("a.py yazıldı"),  # codegen
-        metin_cevap(f"testler geçti\n{BASARI_ISARETI}"),  # validator
-        metin_cevap("kod temiz görünüyor"),  # reviewer
-    ]
+    senaryo = (
+        [
+            metin_cevap("1. adım: a.py yaz"),  # planner
+            metin_cevap("a.py yazıldı"),  # codegen
+        ]
+        + validator_cevaplari(f"testler geçti\n{BASARI_ISARETI}")
+        + [metin_cevap("kod temiz görünüyor")]  # reviewer
+    )
     ork, istemci = orkestrator_kur(tmp_path, senaryo)
     state = ork.gorev_calistir("küçük görev")
 
     roller = [i["system"] for i in istemci.istekler]
     assert "PLANNER" in roller[0]
     assert "CODEGEN" in roller[1]
-    assert "VALIDATOR" in roller[2]
-    assert "REVIEWER" in roller[3]
+    assert "VALIDATOR" in roller[2] and "VALIDATOR" in roller[3]
+    assert "REVIEWER" in roller[4]
     assert state.ciktilar["dogrulama_gecti"] == "True"
     assert state.debug_turu == 0
 
 
 def test_basarisiz_dogrulama_debugger_tetikler(tmp_path):
-    senaryo = [
-        metin_cevap("plan"),  # planner
-        metin_cevap("kod yazıldı"),  # codegen
-        metin_cevap(f"hata var\n{BASARISIZLIK_ISARETI}"),  # validator (1.)
-        metin_cevap("hatayı düzelttim"),  # debugger
-        metin_cevap(f"şimdi geçti\n{BASARI_ISARETI}"),  # validator (2.)
-        metin_cevap("rapor"),  # reviewer
-    ]
+    senaryo = (
+        [metin_cevap("plan"), metin_cevap("kod yazıldı")]
+        + validator_cevaplari(f"hata var\n{BASARISIZLIK_ISARETI}")  # validator (1.)
+        + [metin_cevap("hatayı düzelttim")]  # debugger
+        + validator_cevaplari(f"şimdi geçti\n{BASARI_ISARETI}")  # validator (2.)
+        + [metin_cevap("rapor")]  # reviewer
+    )
     ork, istemci = orkestrator_kur(tmp_path, senaryo)
     state = ork.gorev_calistir("görev")
 
     assert state.debug_turu == 1
     assert state.ciktilar["dogrulama_gecti"] == "True"
-    assert "DEBUGGER" in istemci.istekler[3]["system"]
+    assert "DEBUGGER" in istemci.istekler[4]["system"]
 
 
 def test_debug_turu_siniri(tmp_path):
     senaryo = [metin_cevap("plan"), metin_cevap("kod")]
     # validator hep başarısız + araya debugger: MAX tur boyunca
-    senaryo.append(metin_cevap(BASARISIZLIK_ISARETI))
+    senaryo += validator_cevaplari(BASARISIZLIK_ISARETI)
     for _ in range(MAX_DEBUG_TURU):
         senaryo.append(metin_cevap("düzeltme denemesi"))  # debugger
-        senaryo.append(metin_cevap(BASARISIZLIK_ISARETI))  # validator yine kötü
+        senaryo += validator_cevaplari(BASARISIZLIK_ISARETI)  # validator yine kötü
     senaryo.append(metin_cevap("rapor"))  # reviewer yine de koşar
 
     ork, _ = orkestrator_kur(tmp_path, senaryo)
@@ -241,45 +247,133 @@ def test_debug_turu_siniri(tmp_path):
 
 
 def test_isaretsiz_validator_netlestirmeyle_cozulur(tmp_path):
-    senaryo = [
-        metin_cevap("plan"),
-        metin_cevap("kod"),
-        metin_cevap("her şey yolunda ama işaret koymayı unuttum"),  # validator
-        metin_cevap(BASARI_ISARETI),  # netleştirme cevabı
-        metin_cevap("rapor"),  # reviewer
-    ]
+    senaryo = (
+        [metin_cevap("plan"), metin_cevap("kod")]
+        + validator_cevaplari("her şey yolunda ama işaret koymayı unuttum")
+        + [
+            metin_cevap(BASARI_ISARETI),  # netleştirme cevabı
+            metin_cevap("rapor"),  # reviewer
+        ]
+    )
     ork, istemci = orkestrator_kur(tmp_path, senaryo)
     state = ork.gorev_calistir("görev")
 
     assert state.ciktilar["dogrulama_gecti"] == "True"
     assert state.debug_turu == 0
     # Netleştirme isteği validator rolüne gitmiş olmalı
-    assert "VALIDATOR" in istemci.istekler[3]["system"]
-    assert "TEK satırla" in istemci.istekler[3]["messages"][0]["content"]
+    assert "VALIDATOR" in istemci.istekler[4]["system"]
+    assert "TEK satırla" in istemci.istekler[4]["messages"][0]["content"]
 
 
 def test_netlestirme_de_isaretsizse_hata(tmp_path):
-    senaryo = [
-        metin_cevap("plan"),
-        metin_cevap("kod"),
-        metin_cevap("işaret yok"),
-        metin_cevap("yine işaret koymuyorum"),  # netleştirme de işaretsiz
-    ]
+    senaryo = (
+        [metin_cevap("plan"), metin_cevap("kod")]
+        + validator_cevaplari("işaret yok")
+        + [metin_cevap("yine işaret koymuyorum")]  # netleştirme de işaretsiz
+    )
     ork, _ = orkestrator_kur(tmp_path, senaryo)
     with pytest.raises(OrkestrasyonHatasi, match="işareti yok"):
         ork.gorev_calistir("görev")
+
+
+# --- Kanıt şartı ---
+
+
+def test_kanitsiz_validator_reddedilir_ikincide_kabul(tmp_path):
+    senaryo = (
+        [metin_cevap("plan"), metin_cevap("kod")]
+        + [metin_cevap(BASARISIZLIK_ISARETI)]  # 1. deneme: araçsız hüküm → red
+        + validator_cevaplari(BASARI_ISARETI)  # 2. deneme: kanıtlı
+        + [metin_cevap("rapor")]
+    )
+    ork, istemci = orkestrator_kur(tmp_path, senaryo)
+    state = ork.gorev_calistir("görev")
+
+    assert state.ciktilar["dogrulama_gecti"] == "True"
+    assert state.debug_turu == 0  # kanıtsız BASARISIZ debugger'ı tetiklememeli
+    # Yeniden isteme mesajı gitmiş olmalı
+    assert "reddedildi" in istemci.istekler[3]["messages"][0]["content"]
+
+
+def test_kanitsiz_validator_iki_kez_hata(tmp_path):
+    senaryo = [
+        metin_cevap("plan"),
+        metin_cevap("kod"),
+        metin_cevap(BASARISIZLIK_ISARETI),  # araçsız
+        metin_cevap(BASARI_ISARETI),  # yine araçsız
+    ]
+    ork, _ = orkestrator_kur(tmp_path, senaryo)
+    with pytest.raises(OrkestrasyonHatasi, match="kanıt"):
+        ork.gorev_calistir("görev")
+
+
+# --- Tekrar kilidi ---
+
+
+def test_ayni_cagri_ucuncude_bloklanir(tmp_path):
+    senaryo = [
+        tool_cevap("read_file", {"path": "a.txt"}, "t1"),
+        tool_cevap("read_file", {"path": "a.txt"}, "t2"),
+        tool_cevap("read_file", {"path": "a.txt"}, "t3"),
+        metin_cevap("pes ettim"),
+    ]
+    ork, istemci = orkestrator_kur(tmp_path, senaryo)
+    (ork.executor.workspace / "a.txt").write_text("içerik", encoding="utf-8")
+    ork.ajan_calistir(AJANLAR["debugger"], "incele")
+
+    # Konuşma dizisi: [görev, asst1, sonuç1, asst2, sonuç2, asst3, sonuç3]
+    mesajlar = istemci.istekler[-1]["messages"]
+    ikinci = mesajlar[4]["content"][0]
+    ucuncu = mesajlar[6]["content"][0]
+    assert ikinci["is_error"] is False  # 2. çağrı serbest
+    assert ucuncu["is_error"] is True  # 3. çağrı bloklu
+    assert "zaten" in ucuncu["content"]
+
+
+def test_write_file_tekrar_sayacini_sifirlar(tmp_path):
+    senaryo = [
+        tool_cevap("run_shell", {"command": "python -c \"print(1)\""}, "t1"),
+        tool_cevap("run_shell", {"command": "python -c \"print(1)\""}, "t2"),
+        tool_cevap("write_file", {"path": "duzeltme.py", "content": "x = 1"}, "t3"),
+        tool_cevap("run_shell", {"command": "python -c \"print(1)\""}, "t4"),
+        metin_cevap("bitti"),
+    ]
+    ork, istemci = orkestrator_kur(tmp_path, senaryo)
+    ork.ajan_calistir(AJANLAR["debugger"], "düzelt-doğrula")
+
+    # write_file sonrası aynı komut yeniden serbest olmalı
+    # Dizi: [görev, a1, s1, a2, s2, a3(write), s3, a4, s4]
+    dorduncu = istemci.istekler[-1]["messages"][8]["content"][0]
+    assert dorduncu["is_error"] is False
+    assert "zaten" not in dorduncu["content"]
+
+
+# --- Şema uyarısı ---
+
+
+def test_bilinmeyen_parametre_notu(tmp_path):
+    senaryo = [
+        tool_cevap("search_files", {"query": "x", "path": "a.py"}),
+        metin_cevap("tamam"),
+    ]
+    ork, istemci = orkestrator_kur(tmp_path, senaryo)
+    (ork.executor.workspace / "a.py").write_text("x = 1", encoding="utf-8")
+    ork.ajan_calistir(AJANLAR["debugger"], "ara")
+
+    sonuc = istemci.istekler[1]["messages"][-1]["content"][0]
+    assert "path diye parametre yok" in sonuc["content"]
+    assert "query" in sonuc["content"]  # geçerli parametreler listelenmiş
 
 
 # --- State / devam ---
 
 
 def test_state_kaydedilir_ve_devam_atlar(tmp_path):
-    senaryo = [
-        metin_cevap("plan"),
-        metin_cevap("kod"),
-        metin_cevap(BASARI_ISARETI),
-        metin_cevap("rapor"),
-    ]
+    senaryo = (
+        [metin_cevap("plan"), metin_cevap("kod")]
+        + validator_cevaplari(BASARI_ISARETI)
+        + [metin_cevap("rapor")]
+    )
     ork, _ = orkestrator_kur(tmp_path, senaryo)
     ork.gorev_calistir("görev")
 
@@ -301,18 +395,17 @@ def test_farkli_gorev_devam_etmez(tmp_path):
     yuklenen = OturumState.yukle(yol)
     assert yuklenen is not None and yuklenen.gorev == "eski görev"
 
-    senaryo = [
-        metin_cevap("yeni plan"),
-        metin_cevap("kod"),
-        metin_cevap(BASARI_ISARETI),
-        metin_cevap("rapor"),
-    ]
+    senaryo = (
+        [metin_cevap("yeni plan"), metin_cevap("kod")]
+        + validator_cevaplari(BASARI_ISARETI)
+        + [metin_cevap("rapor")]
+    )
     ork, istemci = orkestrator_kur(tmp_path, senaryo)
     ork.state_yolu = yol
     state = ork.gorev_calistir("yepyeni görev", devam=True)
     # görev farklı olduğu için sıfırdan başlamalı
     assert state.ciktilar["planner"] == "yeni plan"
-    assert len(istemci.istekler) == 4
+    assert len(istemci.istekler) == 5
 
 
 def test_bozuk_state_dosyasi_yok_sayilir(tmp_path):

@@ -29,6 +29,7 @@ type Durum = {
   sonuc: Sonuc | null;
   onay_bekleyen: { id: number; gorev: string } | null;
   kullanim: Kullanim | null;
+  klasor: string | null;
 };
 
 function tokenBicimle(n: number): string {
@@ -248,10 +249,16 @@ export default function Anasayfa() {
             <span>{durum.gorev}</span>
           </h2>
 
-          {durum.kullanim && durum.kullanim.istek > 0 && (
+          {(durum.klasor || (durum.kullanim && durum.kullanim.istek > 0)) && (
             <p className={styles.kullanim}>
-              Token: {tokenBicimle(durum.kullanim.girdi)} giriş ·{" "}
-              {tokenBicimle(durum.kullanim.cikti)} çıkış · {durum.kullanim.istek} istek
+              {durum.klasor && <>Klasör: {durum.klasor}</>}
+              {durum.klasor && durum.kullanim && durum.kullanim.istek > 0 && " · "}
+              {durum.kullanim && durum.kullanim.istek > 0 && (
+                <>
+                  Token: {tokenBicimle(durum.kullanim.girdi)} giriş ·{" "}
+                  {tokenBicimle(durum.kullanim.cikti)} çıkış · {durum.kullanim.istek} istek
+                </>
+              )}
             </p>
           )}
 

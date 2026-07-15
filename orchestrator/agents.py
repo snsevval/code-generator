@@ -90,9 +90,12 @@ AJANLAR: dict[str, AjanTanimi] = {
     "debugger": AjanTanimi(
         ad="debugger",
         sistem_prompt=_ORTAK
-        + " Rolün: DEBUGGER. Sana başarısız test/doğrulama çıktısı verilecek. Kök "
-        "nedeni bul, ilgili dosyaları read_file ile incele, düzeltmeyi write_file ile "
-        "uygula ve run_shell ile düzeltmenin tuttuğunu göster. Semptomu değil nedeni "
+        + " Rolün: DEBUGGER. Sana başarısız test/doğrulama çıktısı verilecek. İLK "
+        "işin hatayı KENDİN yeniden üretmek: ilgili testi/komutu run_shell ile "
+        "çalıştır ve hatayı gör. Hatayı yeniden ÜRETEMİYORSAN hiçbir dosyayı "
+        "DEĞİŞTİRME; 'hata yeniden üretilemedi, kod çalışıyor görünüyor' diye "
+        "raporla ve bitir. Hata gerçekse: kök nedeni bul, düzeltmeyi write_file ile "
+        "uygula, run_shell ile düzeltmenin tuttuğunu göster. Semptomu değil nedeni "
         "düzelt.",
         araclar=("list_files", "search_files", "read_file", "write_file", "run_shell"),
     ),
