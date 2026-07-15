@@ -543,11 +543,31 @@ export default function Anasayfa() {
                         href={`${API}/api/dosya?ad=${encodeURIComponent(d.ad)}`}
                         target="_blank"
                         rel="noopener noreferrer"
-                        title="Tarayıcıda görüntüle"
+                        title="Kaynağı görüntüle"
                       >
                         {d.ad}
                       </a>
                       <span className={styles.dosyaBoyut}>{boyutBicimle(d.boyut)}</span>
+                      {/\.html?$/i.test(d.ad) && (
+                        <a
+                          className={styles.indirDugmesi}
+                          href={`${API}/api/onizle?ad=${encodeURIComponent(d.ad)}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          title={`${d.ad} sayfasını canlı önizle`}
+                          aria-label={`${d.ad} sayfasını önizle`}
+                        >
+                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden>
+                            <path
+                              d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"
+                              stroke="currentColor"
+                              strokeWidth="2"
+                              strokeLinejoin="round"
+                            />
+                            <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="2" />
+                          </svg>
+                        </a>
+                      )}
                       <a
                         className={styles.indirDugmesi}
                         href={`${API}/api/dosya?ad=${encodeURIComponent(d.ad)}&indir=1`}

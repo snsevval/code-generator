@@ -19,7 +19,7 @@ from pathlib import Path
 import httpx
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, PlainTextResponse
+from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse
 from pydantic import BaseModel
 
 from orchestrator.calisma_alani import gorev_klasoru_sec
@@ -230,6 +230,24 @@ def dosya(ad: str, indir: bool = False):
     if indir:
         return FileResponse(hedef, filename=hedef.name)
     return PlainTextResponse(hedef.read_text(encoding="utf-8", errors="replace"))
+
+
+@app.get("/api/onizle", response_class=HTMLResponse)
+def onizle(ad: str):
+    """HTML dosyasını tarayıcının render etmesi için text/html olarak sunar.
+
+    Böylece UI'deki 'Önizle' düğmesi sayfayı canlı açar (CSS/JS dahil çalışır).
+    Yalnızca aktif görev klasörünün içi sunulur (path traversal koruması).
+    """
+    if DURUM.klasor_yolu is None:
+        raise HTTPException(404, "aktif bir görev klasörü yok")
+    kok = DURUM.klasor_yolu.resolve()
+    hedef = (kok / ad).resolve()
+    if not hedef.is_relative_to(kok) or not hedef.is_file():
+        raise HTTPException(404, "dosya bulunamadı")
+    if hedef.suffix.lower() not in (".html", ".htm"):
+        raise HTTPException(400, "yalnızca HTML dosyaları önizlenebilir")
+    return HTMLResponse(hedef.read_text(encoding="utf-8", errors="replace"))
 
 
 @app.get("/api/saglik")

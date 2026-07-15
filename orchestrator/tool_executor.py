@@ -77,6 +77,26 @@ TOOL_TANIMLARI = [
         },
     },
     {
+        "name": "edit_file",
+        "description": (
+            "Bir dosyada küçük değişiklik yapar: eski_metni yeni_metinle değiştirir. "
+            "BÜYÜK dosyalarda write_file yerine BUNU kullan (tüm dosyayı yeniden "
+            "yazma). eski_metin dosyada birebir ve TEK bir yerde geçmeli."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "path": {"type": "string", "description": "Düzenlenecek dosyanın yolu"},
+                "eski_metin": {
+                    "type": "string",
+                    "description": "Değiştirilecek mevcut metin (birebir, benzersiz)",
+                },
+                "yeni_metin": {"type": "string", "description": "Yerine yazılacak metin"},
+            },
+            "required": ["path", "eski_metin", "yeni_metin"],
+        },
+    },
+    {
         "name": "list_files",
         "description": (
             "Workspace'teki dosyaları (alt klasörler dahil) boyutlarıyla listeler. "
@@ -389,6 +409,44 @@ class ToolExecutor:
                 parcalar.append(f"Görsel analiz (Gemini):\n{analiz}")
         return ToolSonucu(True, _kes("\n\n".join(parcalar)))
 
+    def edit_file(self, path: str, eski_metin: str, yeni_metin: str) -> ToolSonucu:
+        """Dosyada eski_metni yeni_metinle değiştirir (birebir, benzersiz eşleşme)."""
+        try:
+            tam = self._coz(path)
+        except ValueError as e:
+            return ToolSonucu(False, f"HATA: {e}")
+        if not tam.is_file():
+            return ToolSonucu(False, f"HATA: dosya bulunamadı: {path!r}")
+        if not eski_metin:
+            return ToolSonucu(False, "HATA: eski_metin boş olamaz")
+
+        icerik = tam.read_text(encoding="utf-8", errors="replace")
+        adet = icerik.count(eski_metin)
+        if adet == 0:
+            return ToolSonucu(
+                False,
+                "HATA: eski_metin dosyada bulunamadı (birebir eşleşmeli — boşluk/girinti "
+                "dahil). read_file ile güncel içeriği kontrol et.",
+            )
+        if adet > 1:
+            return ToolSonucu(
+                False,
+                f"HATA: eski_metin dosyada {adet} kez geçiyor; benzersiz olmalı. "
+                "Çevresine bağlam ekleyerek tek eşleşme sağla.",
+            )
+
+        yeni_icerik = icerik.replace(eski_metin, yeni_metin)
+        tam.write_text(yeni_icerik, encoding="utf-8", newline="\n")
+        diff = "".join(
+            difflib.unified_diff(
+                icerik.splitlines(keepends=True),
+                yeni_icerik.splitlines(keepends=True),
+                fromfile=f"a/{path}",
+                tofile=f"b/{path}",
+            )
+        )
+        return ToolSonucu(True, f"{path} düzenlendi.\n\n{_kes(diff)}")
+
     def run_shell(self, command: str, timeout: float | None = None) -> ToolSonucu:
         if not command or not command.strip():
             return ToolSonucu(False, "HATA: command boş olamaz")
@@ -432,6 +490,12 @@ class ToolExecutor:
             return self.read_file(girdi.get("path", ""))
         if ad == "write_file":
             return self.write_file(girdi.get("path", ""), girdi.get("content", ""))
+        if ad == "edit_file":
+            return self.edit_file(
+                girdi.get("path", ""),
+                girdi.get("eski_metin", ""),
+                girdi.get("yeni_metin", ""),
+            )
         if ad == "run_shell":
             return self.run_shell(girdi.get("command", ""), girdi.get("timeout"))
         return ToolSonucu(False, f"HATA: bilinmeyen araç: {ad!r}")

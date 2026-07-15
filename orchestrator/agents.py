@@ -68,12 +68,14 @@ AJANLAR: dict[str, AjanTanimi] = {
     "codegen": AjanTanimi(
         ad="codegen",
         sistem_prompt=_ORTAK
-        + " Rolün: CODEGEN. Sana verilen planı uygula: dosyaları write_file ile yaz, "
-        "gerekirse read_file ile mevcut kodu incele, hızlı doğrulamalar için run_shell "
-        "kullanabilirsin. HTML/arayüz dosyası ürettiysen check_page ile açıp konsol "
-        "hatalarını ve görsel analizi kontrol et, bulgulara göre düzelt. Plandaki her "
+        + " Rolün: CODEGEN. Yeni dosyayı write_file ile yaz. MEVCUT bir dosyada "
+        "küçük değişiklik/düzeltme gerekiyorsa write_file ile TÜM dosyayı yeniden "
+        "yazma — edit_file ile sadece ilgili kısmı değiştir (büyük dosyaları baştan "
+        "yazmak hata üretir). read_file ile mevcut kodu incele, run_shell ile hızlı "
+        "doğrula. HTML/arayüz dosyası ürettiysen check_page ile açıp konsol hatalarını "
+        "ve görsel analizi kontrol et, bulguları edit_file ile düzelt. Plandaki her "
         "adımı tamamla; bitirince hangi dosyaları yazdığını özetle.",
-        araclar=("list_files", "search_files", "read_file", "write_file", "run_shell", "check_page"),
+        araclar=("list_files", "search_files", "read_file", "write_file", "edit_file", "run_shell", "check_page"),
     ),
     "validator": AjanTanimi(
         ad="validator",
@@ -87,7 +89,7 @@ AJANLAR: dict[str, AjanTanimi] = {
         "Cevabının EN SON satırı tam olarak şu ikisinden biri olmalı: "
         f"'{BASARI_ISARETI}' veya '{BASARISIZLIK_ISARETI}'. Başarısızsa üstüne hata "
         "çıktısını ve nedenini yaz.",
-        araclar=("list_files", "search_files", "read_file", "write_file", "run_shell", "check_page"),
+        araclar=("list_files", "search_files", "read_file", "write_file", "edit_file", "run_shell", "check_page"),
         mevcut_dosyayi_degistiremez=True,
     ),
     "debugger": AjanTanimi(
@@ -97,10 +99,10 @@ AJANLAR: dict[str, AjanTanimi] = {
         "işin hatayı KENDİN yeniden üretmek: ilgili testi/komutu run_shell ile "
         "çalıştır ve hatayı gör. Hatayı yeniden ÜRETEMİYORSAN hiçbir dosyayı "
         "DEĞİŞTİRME; 'hata yeniden üretilemedi, kod çalışıyor görünüyor' diye "
-        "raporla ve bitir. Hata gerçekse: kök nedeni bul, düzeltmeyi write_file ile "
-        "uygula, run_shell ile düzeltmenin tuttuğunu göster. Semptomu değil nedeni "
-        "düzelt.",
-        araclar=("list_files", "search_files", "read_file", "write_file", "run_shell", "check_page"),
+        "raporla ve bitir. Hata gerçekse: kök nedeni bul, düzeltmeyi edit_file ile "
+        "uygula (tüm dosyayı yeniden yazma), run_shell ile düzeltmenin tuttuğunu "
+        "göster. Semptomu değil nedeni düzelt.",
+        araclar=("list_files", "search_files", "read_file", "write_file", "edit_file", "run_shell", "check_page"),
     ),
     "decomposer": AjanTanimi(
         ad="decomposer",

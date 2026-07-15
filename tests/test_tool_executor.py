@@ -108,6 +108,57 @@ def test_dosya_var_mi(executor):
     assert not executor.dosya_var_mi("../disarida.txt")  # kaçış → False
 
 
+# --- edit_file ---
+
+
+def test_edit_file_degistirir(executor):
+    executor.write_file("a.py", "x = 1\ny = 2\nz = 3\n")
+    sonuc = executor.edit_file("a.py", "y = 2", "y = 20")
+    assert sonuc.ok
+    assert "düzenlendi" in sonuc.cikti
+    assert executor.read_file("a.py").cikti == "x = 1\ny = 20\nz = 3\n"
+
+
+def test_edit_file_bulunamayan_metin(executor):
+    executor.write_file("a.py", "x = 1")
+    sonuc = executor.edit_file("a.py", "yok_boyle", "yeni")
+    assert not sonuc.ok
+    assert "bulunamadı" in sonuc.cikti
+
+
+def test_edit_file_coklu_eslesme_reddedilir(executor):
+    executor.write_file("a.py", "n = 0\nn = 0\n")
+    sonuc = executor.edit_file("a.py", "n = 0", "n = 1")
+    assert not sonuc.ok
+    assert "2 kez" in sonuc.cikti
+    # dosya değişmemiş olmalı
+    assert executor.read_file("a.py").cikti == "n = 0\nn = 0\n"
+
+
+def test_edit_file_diff_uretir(executor):
+    executor.write_file("a.txt", "eski satır\n")
+    sonuc = executor.edit_file("a.txt", "eski satır", "yeni satır")
+    assert "-eski satır" in sonuc.cikti
+    assert "+yeni satır" in sonuc.cikti
+
+
+def test_edit_file_olmayan_dosya(executor):
+    assert not executor.edit_file("yok.txt", "a", "b").ok
+
+
+def test_edit_file_disari_cikamaz(executor):
+    sonuc = executor.edit_file("../dis.txt", "a", "b")
+    assert not sonuc.ok
+    assert "HATA" in sonuc.cikti
+
+
+def test_dispatcher_edit_file(executor):
+    executor.write_file("d.txt", "merhaba dunya")
+    sonuc = executor.calistir("edit_file", {"path": "d.txt", "eski_metin": "dunya", "yeni_metin": "sevval"})
+    assert sonuc.ok
+    assert executor.read_file("d.txt").cikti == "merhaba sevval"
+
+
 # --- Path doğrulama ---
 
 

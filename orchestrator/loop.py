@@ -158,9 +158,9 @@ class Orkestrator:
                         "elindeki bilgiyle sonucu raporla.",
                     )
                 # Rol kısıtı: bazı ajanlar (validator) mevcut dosyayı değiştiremez —
-                # promptla değil mekanik olarak engellenir
+                # promptla değil mekanik olarak engellenir (write_file + edit_file)
                 elif (
-                    blok["name"] == "write_file"
+                    blok["name"] in ("write_file", "edit_file")
                     and ajan.mevcut_dosyayi_degistiremez
                     and self.executor.dosya_var_mi(girdi.get("path", ""))
                 ):
@@ -184,7 +184,7 @@ class Orkestrator:
                 else:
                     sonuc = self.executor.calistir(blok["name"], girdi)
                     self.son_arac_sayisi += 1
-                    if blok["name"] == "write_file" and sonuc.ok:
+                    if blok["name"] in ("write_file", "edit_file") and sonuc.ok:
                         # Durum değişti: bundan sonraki tekrarlar meşru
                         # (düzelt → yeniden test et döngüsü)
                         tekrar_sayaci.clear()
