@@ -40,7 +40,12 @@ class GitDeposu:
             return None
         depo = cls(Path(workspace).resolve())
         try:
-            if depo._git("rev-parse", "--is-inside-work-tree").returncode != 0:
+            # Klasörün KENDİ deposu olmalı. "--is-inside-work-tree" yeterli değil:
+            # workspace ana projenin içindeyse üst repo bulunur ve commit'ler
+            # oraya gider (canlıda yaşandı — orkestratör ana repoya commit attı).
+            ust = depo._git("rev-parse", "--show-toplevel").stdout.strip()
+            kendi_reposu = ust and Path(ust).resolve() == depo.workspace
+            if not kendi_reposu:
                 if depo._git("init").returncode != 0:
                     return None
             # Commit kimliği yoksa yerel (yalnızca bu depoya özel) kimlik yaz

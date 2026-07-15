@@ -54,6 +54,35 @@ def test_degisiklik_yoksa_commit_atmaz(tmp_path):
     assert "iki" not in _log(tmp_path, "log", "--oneline")
 
 
+@git_gerekli
+def test_ust_repo_icinde_kendi_reposunu_kurar(tmp_path):
+    """Görev klasörü bir üst reponun içindeyse commit'ler ÜST repoya gitmemeli.
+
+    Canlıda yaşandı: workspace ana projenin içinde olduğundan orkestratör,
+    commit'lenmemiş proje kodunu ana repoya kendi mesajıyla commit'ledi.
+    """
+    subprocess.run(["git", "-C", str(tmp_path), "init"], capture_output=True)
+    (tmp_path / "ana_dosya.py").write_text("x = 1", encoding="utf-8")
+    ic = tmp_path / "workspace" / "gorev-1"
+    ic.mkdir(parents=True)
+
+    depo = GitDeposu.olustur(ic)
+    assert depo is not None
+    assert (ic / ".git").is_dir()  # kendi reposu kuruldu
+
+    (ic / "uretilen.py").write_text("y = 2", encoding="utf-8")
+    assert depo.commit("görev bitti") is True
+
+    # Üst reponun tarihçesi ve indeksi el değmemiş kalmalı
+    ust_log = _log(tmp_path, "log", "--oneline")
+    assert "görev bitti" not in ust_log
+    ust_durum = subprocess.run(
+        ["git", "-C", str(tmp_path), "status", "--porcelain"],
+        capture_output=True, text=True, encoding="utf-8",
+    ).stdout
+    assert "ana_dosya.py" in ust_durum  # hâlâ commit'lenmemiş (bizim dokunmadığımız) halde
+
+
 def test_fcc_git_kapatir(tmp_path, monkeypatch):
     monkeypatch.setenv("FCC_GIT", "0")
     assert GitDeposu.olustur(tmp_path) is None
