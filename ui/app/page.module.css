@@ -644,10 +644,42 @@
   min-width: 0;
 }
 
-.dosyaListe li span {
+.dosyaLink {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  color: var(--mor-acik);
+  cursor: pointer;
+}
+
+.dosyaLink:hover {
+  text-decoration: underline;
+}
+
+.dosyaBoyut {
+  margin-left: auto;
+  flex-shrink: 0;
+  font-size: 0.7rem;
+  color: var(--metin-ikincil);
+  font-variant-numeric: tabular-nums;
+}
+
+.indirDugmesi {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 6px;
+  color: var(--metin-ikincil);
+  flex-shrink: 0;
+  cursor: pointer;
+  transition: color 150ms ease-out, background 150ms ease-out;
+}
+
+.indirDugmesi:hover {
+  color: var(--mor-acik);
+  background: var(--soluk);
 }
 
 .spinner {

@@ -104,6 +104,41 @@ def test_durum_kullanim_alani_icerir(istemci):
     assert "kullanim" in veri  # koşu yokken None olabilir
 
 
+def test_dosyalar_listeler_ve_indirir(istemci, tmp_path):
+    (tmp_path / "arac.py").write_text("print('selam')", encoding="utf-8")
+    (tmp_path / "alt").mkdir()
+    (tmp_path / "alt" / "veri.json").write_text("{}", encoding="utf-8")
+    api.DURUM.klasor_yolu = tmp_path
+
+    liste = istemci.get("/api/dosyalar").json()["dosyalar"]
+    assert [d["ad"] for d in liste] == ["alt/veri.json", "arac.py"]
+    assert liste[1]["boyut"] > 0
+
+    # Görüntüleme: düz metin döner
+    goruntu = istemci.get("/api/dosya", params={"ad": "arac.py"})
+    assert goruntu.status_code == 200
+    assert "print('selam')" in goruntu.text
+
+    # İndirme: ek dosya başlığıyla döner
+    indirme = istemci.get("/api/dosya", params={"ad": "arac.py", "indir": "1"})
+    assert indirme.status_code == 200
+    assert "attachment" in indirme.headers.get("content-disposition", "")
+
+
+def test_dosya_path_traversal_reddedilir(istemci, tmp_path):
+    (tmp_path / "ic").mkdir()
+    api.DURUM.klasor_yolu = tmp_path / "ic"
+    (tmp_path / "gizli.txt").write_text("sır", encoding="utf-8")
+
+    yanit = istemci.get("/api/dosya", params={"ad": "../gizli.txt"})
+    assert yanit.status_code == 404
+
+
+def test_dosya_klasor_yokken_404(istemci):
+    assert istemci.get("/api/dosya", params={"ad": "x.py"}).status_code == 404
+    assert istemci.get("/api/dosyalar").json() == {"dosyalar": []}
+
+
 def test_saglik_endpointi(istemci):
     veri = istemci.get("/api/saglik").json()
     assert veri["api"] is True

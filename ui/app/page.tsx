@@ -58,15 +58,12 @@ function asamaDurumlari(log: string[]): Record<string, AsamaDurumu> {
   return durum;
 }
 
-// Canlı logdan yazılan dosyaları türet (write_file çağrıları)
-function ciktiDosyalari(log: string[]): string[] {
-  const dosyalar: string[] = [];
-  for (const satir of log) {
-    if (!satir.includes("write_file")) continue;
-    const eslesme = satir.match(/'path':\s*'([^']+)'/);
-    if (eslesme && !dosyalar.includes(eslesme[1])) dosyalar.push(eslesme[1]);
-  }
-  return dosyalar.reverse(); // en son yazılan en üstte
+type Dosya = { ad: string; boyut: number };
+
+function boyutBicimle(bayt: number): string {
+  if (bayt >= 1024 * 1024) return `${(bayt / 1024 / 1024).toFixed(1)} MB`;
+  if (bayt >= 1024) return `${(bayt / 1024).toFixed(1)} KB`;
+  return `${bayt} B`;
 }
 
 function satirSinifi(satir: string): string {
@@ -173,7 +170,19 @@ export default function Anasayfa() {
   }, [durum?.log.length]);
 
   const asamalar = useMemo(() => asamaDurumlari(durum?.log ?? []), [durum?.log]);
-  const dosyalar = useMemo(() => ciktiDosyalari(durum?.log ?? []), [durum?.log]);
+
+  // Çıktı dosyaları: görev klasörünün gerçek içeriği (API'den)
+  const [dosyalar, setDosyalar] = useState<Dosya[]>([]);
+  useEffect(() => {
+    if (!durum?.klasor) {
+      setDosyalar([]);
+      return;
+    }
+    fetch(`${API}/api/dosyalar`)
+      .then((y) => y.json())
+      .then((v) => setDosyalar(v.dosyalar ?? []))
+      .catch(() => setDosyalar([]));
+  }, [durum?.klasor, durum?.log.length, durum?.calisiyor]);
 
   async function onayGonder(devam: boolean) {
     try {
@@ -512,8 +521,35 @@ export default function Anasayfa() {
                 </div>
                 <ul className={styles.dosyaListe}>
                   {dosyalar.map((d) => (
-                    <li key={d}>
-                      <IkonDosya /> <span className={styles.kodMetin}>{d}</span>
+                    <li key={d.ad}>
+                      <IkonDosya />
+                      <a
+                        className={`${styles.kodMetin} ${styles.dosyaLink}`}
+                        href={`${API}/api/dosya?ad=${encodeURIComponent(d.ad)}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        title="Tarayıcıda görüntüle"
+                      >
+                        {d.ad}
+                      </a>
+                      <span className={styles.dosyaBoyut}>{boyutBicimle(d.boyut)}</span>
+                      <a
+                        className={styles.indirDugmesi}
+                        href={`${API}/api/dosya?ad=${encodeURIComponent(d.ad)}&indir=1`}
+                        download={d.ad}
+                        title={`${d.ad} dosyasını indir`}
+                        aria-label={`${d.ad} dosyasını indir`}
+                      >
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden>
+                          <path
+                            d="M12 4v11m0 0 4-4m-4 4-4-4M5 19h14"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          />
+                        </svg>
+                      </a>
                     </li>
                   ))}
                 </ul>

@@ -19,13 +19,18 @@ from pathlib import Path
 import httpx
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse, PlainTextResponse
 from pydantic import BaseModel
 
 from orchestrator.calisma_alani import gorev_klasoru_sec
 from orchestrator.llm_client import VARSAYILAN_PROXY_URL
 from orchestrator.loop import Orkestrator
 from orchestrator.proje import ProjeOrkestratoru
-from orchestrator.tool_executor import DockerShellRunner, ToolExecutor
+from orchestrator.tool_executor import (
+    GIZLENEN_KLASORLER,
+    DockerShellRunner,
+    ToolExecutor,
+)
 
 app = FastAPI(title="code-generator API")
 app.add_middleware(
@@ -68,8 +73,9 @@ class _Durum:
         self.onay_karari = False
         # Koşan orkestratörün LLM istemcisi (token sayacı buradan okunur)
         self.istemci = None
-        # Görevin izole çalışma klasörü (UI'de gösterilir)
+        # Görevin izole çalışma klasörü (UI'de gösterilir + dosya servisi kökü)
         self.klasor: str | None = None
+        self.klasor_yolu: Path | None = None
 
 
 DURUM = _Durum()
@@ -84,6 +90,7 @@ def _gorev_kos(istek: GorevIstegi) -> None:
         # Görev başına izole klasör: eski görevlerin dosyaları yenisine sızmasın
         ws = gorev_klasoru_sec(taban, devam=istek.devam, proje=istek.proje)
         DURUM.klasor = f"{taban.name}/{ws.name}"
+        DURUM.klasor_yolu = ws
         runner = DockerShellRunner(ws) if istek.docker else None
         log = lambda satir: DURUM.log.append(satir)  # noqa: E731
         ork = ORKESTRATOR_FABRIKASI(ws, ToolExecutor(ws, shell_runner=runner), log)
@@ -178,6 +185,38 @@ def onay_ver(karar: OnayKarari):
     DURUM.onay_karari = karar.devam
     DURUM.onay_olayi.set()
     return {"alindi": True, "devam": karar.devam}
+
+
+@app.get("/api/dosyalar")
+def dosyalar():
+    """Aktif görev klasöründeki dosyaları listeler (UI'deki Çıktı Dosyaları)."""
+    if DURUM.klasor_yolu is None or not DURUM.klasor_yolu.is_dir():
+        return {"dosyalar": []}
+    kok = DURUM.klasor_yolu
+    liste = []
+    for kok_dizin, klasorler, adlar in os.walk(kok):
+        klasorler[:] = [
+            k for k in klasorler if k not in GIZLENEN_KLASORLER and not k.startswith(".")
+        ]
+        for ad in adlar:
+            p = Path(kok_dizin) / ad
+            liste.append({"ad": p.relative_to(kok).as_posix(), "boyut": p.stat().st_size})
+    return {"dosyalar": sorted(liste, key=lambda d: d["ad"])}
+
+
+@app.get("/api/dosya")
+def dosya(ad: str, indir: bool = False):
+    """Tek dosyayı görüntüler (varsayılan) veya indirir (?indir=1)."""
+    if DURUM.klasor_yolu is None:
+        raise HTTPException(404, "aktif bir görev klasörü yok")
+    kok = DURUM.klasor_yolu.resolve()
+    hedef = (kok / ad).resolve()
+    # Path traversal koruması: klasör dışına çıkan istekler reddedilir
+    if not hedef.is_relative_to(kok) or not hedef.is_file():
+        raise HTTPException(404, "dosya bulunamadı")
+    if indir:
+        return FileResponse(hedef, filename=hedef.name)
+    return PlainTextResponse(hedef.read_text(encoding="utf-8", errors="replace"))
 
 
 @app.get("/api/saglik")
