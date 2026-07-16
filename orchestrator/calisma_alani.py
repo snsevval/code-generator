@@ -17,6 +17,20 @@ from pathlib import Path
 
 KAYIT_DOSYASI = ".son_gorev_klasoru"
 
+# Görev klasörüne konan izolasyon dosyaları — önleyici sigorta. Workspace ana
+# projenin İÇİNDE olduğundan, ajan dosya belirtmeden `pytest` çalıştırırsa pytest
+# rootdir'i yukarı tırmanıp ana projenin pyproject.toml'unu (testpaths=["tests"])
+# bulur ve ana projenin testlerini (test_docker_sandbox vb.) toplamaya çalışır.
+# Kendi pytest.ini + conftest.py rootdir'i görev klasörüne kilitler ve klasörü
+# import yoluna ekler. (git_deposu'nun kendi-repo düzeltmesiyle aynı kök neden:
+# workspace ana projenin içinde.)
+_PYTEST_INI = "[pytest]\npythonpath = .\n"
+_CONFTEST = (
+    "# Görev klasörünü rootdir sabitler (ana projenin pytest ayarları sızmasın).\n"
+    "import sys\nfrom pathlib import Path\n"
+    "sys.path.insert(0, str(Path(__file__).parent))\n"
+)
+
 
 def gorev_klasoru_sec(taban: Path | str, devam: bool = False, proje: bool = False) -> Path:
     """Görev için çalışma klasörünü döndürür (gerekirse oluşturur)."""
@@ -38,4 +52,7 @@ def gorev_klasoru_sec(taban: Path | str, devam: bool = False, proje: bool = Fals
         klasor = taban / f"{ad}-{sayac}"
     klasor.mkdir()
     kayit.write_text(klasor.name, encoding="utf-8")
+    # pytest'i bu klasöre hapset (ana projenin config'i sızmasın)
+    (klasor / "pytest.ini").write_text(_PYTEST_INI, encoding="utf-8")
+    (klasor / "conftest.py").write_text(_CONFTEST, encoding="utf-8")
     return klasor

@@ -25,6 +25,12 @@ _ORTAK_KURALLAR = f"""
   start_server çağrısı iki alan ister; örnek: {{"command": "uvicorn backend:app --port {BACKEND_PORT}", "port": {BACKEND_PORT}}}
 - Bir sunucuyu başlat-durdur döngüsüne sokma: bir kez başlat, tüm doğrulamayı yap, en sonda durdur.
 - İş bitince açtığın HER sunucuyu stop_server ile durdur.
+- Testler İZOLE olmalı: backend'de bellekte durum tutuluyorsa (global sayaç vb.),
+  her test kendi başlangıç durumunu kurmalı (örn. önce /sifirla çağır ya da
+  fixture ile sıfırla). Aksi halde testler sırayla koşunca birikir ve YANLIŞ
+  başarısızlık verir (canlıda beklenen 5 yerine 6 gelip çöktü).
+- pytest tek bir testte başarısız olursa PANİKLEME: hatayı OKU (assert satırı),
+  nedeni düzelt. '-p no:docker', 'pip uninstall', ortam değişkeni denemesi YAPMA.
 """
 
 _PLAYBOOKLAR: dict[str, str] = {
