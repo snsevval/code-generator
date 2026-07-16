@@ -1,0 +1,4 @@
+# Dokümantasyon sitesi (MkDocs) bağımlılıkları — CI ve yerel build için.
+# Kur: pip install -r requirements-docs.txt
+# Yerel önizleme: mkdocs serve
+mkdocs-material==9.7.6

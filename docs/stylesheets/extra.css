@@ -1,0 +1,137 @@
+/* ============================================================
+   Agentic Kod Üretim Sistemi — Özel tema (turuncu)
+   Material for MkDocs üzerine ince rötuşlar: turuncu kimlik,
+   kart tasarımı, tipografi ayarı, mermaid diyagram kutuları.
+   ============================================================ */
+
+:root {
+  /* Turuncu kimlik — Material paletinin üstüne kalibre edilmiş tonlar */
+  --md-primary-fg-color:        #e8590c;
+  --md-primary-fg-color--light: #ff7a3d;
+  --md-primary-fg-color--dark:  #c44508;
+  --md-accent-fg-color:         #f76707;
+
+  --brand-warm-bg:   #fff8f3;
+  --brand-card-bg:   #ffffff;
+  --brand-border:    #f0e2d6;
+  --brand-ink-soft:  #6b5b52;
+}
+
+/* Koyu temada sıcak nötrler (saf gri değil — turuncuya hafif kayık) */
+[data-md-color-scheme="slate"] {
+  --md-primary-fg-color:  #ff7a3d;
+  --md-accent-fg-color:   #ff924d;
+  --md-default-bg-color:  #14100d;
+  --brand-warm-bg:  #1c1712;
+  --brand-card-bg:  #211a15;
+  --brand-border:   #34291f;
+  --brand-ink-soft: #b7a89c;
+}
+
+/* ---- Tipografi ---- */
+.md-typeset h1 {
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+.md-typeset h2 {
+  font-weight: 750;
+  letter-spacing: -0.01em;
+  margin-top: 2.4em;
+}
+.md-typeset h2::before {
+  /* ince turuncu üst çizgi — bölümleri görsel ayırır */
+  content: "";
+  display: block;
+  width: 44px;
+  height: 3px;
+  border-radius: 3px;
+  background: var(--md-primary-fg-color);
+  margin-bottom: 0.5em;
+}
+
+/* ---- Kahraman (hero) — yalnızca ana sayfa ---- */
+.hero {
+  background:
+    radial-gradient(120% 120% at 0% 0%, rgba(247, 103, 7, 0.14), transparent 55%),
+    var(--brand-warm-bg);
+  border: 1px solid var(--brand-border);
+  border-radius: 18px;
+  padding: 2.6rem 2.2rem;
+  margin: 0.5rem 0 2rem;
+}
+.hero .eyebrow {
+  font-family: var(--md-code-font-family, monospace);
+  font-size: 0.72rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--md-primary-fg-color);
+  margin: 0 0 0.6rem;
+}
+.hero h1 {
+  margin: 0 0 0.6rem;
+  font-size: clamp(1.9rem, 4vw, 2.7rem);
+  line-height: 1.08;
+}
+.hero p {
+  max-width: 60ch;
+  color: var(--brand-ink-soft);
+  font-size: 1.05rem;
+  margin: 0;
+}
+.hero .stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 1.4rem;
+}
+.hero .stats span {
+  font-family: var(--md-code-font-family, monospace);
+  font-size: 0.78rem;
+  background: var(--brand-card-bg);
+  border: 1px solid var(--brand-border);
+  padding: 0.3rem 0.7rem;
+  border-radius: 999px;
+}
+.hero .stats b { color: var(--md-primary-fg-color); }
+
+/* ---- Kart ızgarası (Material .grid.cards rötuşu) ---- */
+.md-typeset .grid.cards > ul > li,
+.md-typeset .grid > .card {
+  border: 1px solid var(--brand-border);
+  border-radius: 14px;
+  background: var(--brand-card-bg);
+  transition: border-color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+}
+.md-typeset .grid.cards > ul > li:hover {
+  border-color: var(--md-primary-fg-color);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px -12px rgba(232, 89, 12, 0.4);
+}
+.md-typeset .grid.cards > ul > li > hr {
+  border-color: var(--brand-border);
+}
+
+/* ---- Mermaid diyagram kutusu ----
+   Zemini SABİTLEME: Material diyagram renklerini temaya göre (--md-mermaid-*)
+   ayarlıyor; sabit beyaz zemin koyu temada açık yazıyı görünmez yapardı.
+   Yalnız çerçeve + iç boşluk + yatay kaydırma veriyoruz. */
+.md-typeset .mermaid {
+  background: var(--brand-warm-bg);
+  border: 1px solid var(--brand-border);
+  border-radius: 12px;
+  padding: 1rem;
+  margin: 1.2rem 0;
+  overflow-x: auto;
+}
+
+/* ---- Tablo başlıkları turuncu vurgu ---- */
+.md-typeset table:not([class]) th {
+  background: color-mix(in srgb, var(--md-primary-fg-color) 10%, transparent);
+  font-weight: 700;
+}
+
+/* ---- Bağlantılar ve kod ---- */
+.md-typeset a { text-decoration-color: color-mix(in srgb, var(--md-primary-fg-color) 45%, transparent); }
+.md-typeset code {
+  background: color-mix(in srgb, var(--md-primary-fg-color) 8%, transparent);
+}

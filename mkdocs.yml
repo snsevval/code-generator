@@ -1,0 +1,86 @@
+site_name: Agentic Kod Üretim Sistemi
+site_description: Doğal dil görevden çalışan kod üreten çok-ajanlı yapay zekâ üretim hattı — teknik dokümantasyon.
+site_author: Kamil San
+# GitHub Pages'e yayınlanınca burayı gerçek adresle güncelle:
+# site_url: https://<kullanici>.github.io/code-generator/
+
+theme:
+  name: material
+  language: tr
+  icon:
+    logo: material/robot-happy
+    repo: fontawesome/brands/github
+  palette:
+    # Açık tema
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: deep orange
+      accent: orange
+      toggle:
+        icon: material/weather-night
+        name: Koyu temaya geç
+    # Koyu tema
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: deep orange
+      accent: orange
+      toggle:
+        icon: material/weather-sunny
+        name: Açık temaya geç
+  font:
+    text: Manrope
+    code: JetBrains Mono
+  features:
+    - navigation.instant
+    - navigation.instant.progress
+    - navigation.tracking
+    - navigation.top
+    - navigation.sections
+    - navigation.indexes
+    - toc.follow
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - content.code.annotate
+
+extra_css:
+  - stylesheets/extra.css
+
+markdown_extensions:
+  - abbr
+  - admonition
+  - attr_list
+  - md_in_html
+  - footnotes
+  - tables
+  - toc:
+      permalink: true
+      permalink_title: Bu bölüme bağlantı
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.details
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+
+plugins:
+  - search:
+      lang: tr
+
+nav:
+  - Ana Sayfa: index.md
+  - Proje Raporu: PROJE_RAPORU.md
+  - Anlık Durum: DURUM.md
+  - Görev Planı: task_plan.md
+
+extra:
+  generator: false
