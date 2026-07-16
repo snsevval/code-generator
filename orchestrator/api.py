@@ -28,6 +28,7 @@ from orchestrator.calisma_alani import gorev_klasoru_sec
 from orchestrator.llm_client import VARSAYILAN_PROXY_URL
 from orchestrator.loop import Orkestrator
 from orchestrator.proje import ProjeOrkestratoru
+from orchestrator.playbook import gorevi_zenginlestir as playbook_zenginlestir
 from orchestrator.tasarim import gorevi_zenginlestir
 from orchestrator.tool_executor import (
     GIZLENEN_KLASORLER,
@@ -119,6 +120,11 @@ def _gorev_kos(istek: GorevIstegi) -> None:
                 if gorev_metni != istek.gorev
                 else "[tasarım] tasarım scripti bulunamadı, görev değişmeden sürüyor."
             )
+        # Playbook: teknik tarif (portlar, araç akışı, doğrulama) otomatik eklenir —
+        # kullanıcının mühendislik detayı yazması gerekmez
+        gorev_metni, playbook_adi = playbook_zenginlestir(gorev_metni)
+        if playbook_adi:
+            log(f"[tarif] '{playbook_adi}' playbook'u göreve eklendi (portlar + araç akışı).")
         if istek.proje:
             onay = _onay_bekle if istek.onayli else None
             proje = ProjeOrkestratoru(ws, orkestrator=ork, log=log, onay_callback=onay)

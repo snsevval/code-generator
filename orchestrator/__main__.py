@@ -59,6 +59,12 @@ def main() -> int:
             else "Tasarım scripti bulunamadı; görev değişmeden sürüyor."
         )
 
+    from orchestrator.playbook import gorevi_zenginlestir as playbook_zenginlestir
+
+    gorev, playbook_adi = playbook_zenginlestir(gorev)
+    if playbook_adi:
+        print(f"Tarif eklendi: {playbook_adi} (portlar + araç akışı sistemden)")
+
     # Görev başına izole klasör (--workspace kök sayılır; --devam sonuncuyu sürdürür)
     workspace = gorev_klasoru_sec(Path(args.workspace), devam=args.devam, proje=args.proje)
     print(f"Çalışma klasörü: {workspace}")

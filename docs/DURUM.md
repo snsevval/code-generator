@@ -77,8 +77,10 @@ işlerde KAPALI tut — imajda node yok).
 - Frontend: CDN React, çok dosyalı HTML/CSS/JS, tasarım sistemli sayfalar (fiyat, portfolyo)
 - Görsel doğrulama: check_page + Gemini, gömülü kusurları (kontrast/taşma) yakaladı
 - **Vite**: npm install + dev server çalışıyor (mekanizma; IPv6 fix sonrası kanıtlı)
-- **Backend**: FastAPI + uvicorn + curl testi, kalıcı state kanıtlı
-- **Full-stack**: frontend, backend'den fetch ile veri okudu (iki port, CORS) — mekanizma kanıtlı
+- **Backend (AJANLAR, 2026-07-16)**: FastAPI + pytest + start_server/uvicorn + curl
+  canlı doğrulama + stop_server — uçtan uca ajan yapımı, dogrulama=True
+- **Full-stack (AJANLAR, 2026-07-16)**: backend + fetch'li frontend + testler; çift
+  sunucu aynı anda ayakta, frontend backend'den değeri okudu (screenshot kanıtlı)
 
 ## Mekanik korumalar (kaza analizlerinden doğdu)
 
@@ -101,11 +103,17 @@ işlerde KAPALI tut — imajda node yok).
    yüklerken check_page'e dosya yolu verilirse mekanik red + doğru akış mesajı
    (start_server → http://localhost:<port>). Validator promptu da güncellendi;
    6 yeni tarayıcısız test.
-2. **Codegen'i güçlü kod modeline al:** Nemotron karmaşık koreografide zorlanıyor
-   (vite.config unutma, React import eksik). NIM'de Qwen2.5-Coder benzeri modeli
-   tutarlılık testinden geçirip `FCC_MODEL_CODEGEN`'e ata.
-3. **Ajanların kendi başına uçtan uca full-stack görevi:** Mekanizma kanıtlı (elle);
-   1+2 yapıldıktan sonra gerçek sınav: "FastAPI backend + fetch'li frontend + testler".
+2. ~~Ajanların full-stack sınavı~~ **GEÇİLDİ (2026-07-16):** Ajanlar backend görevini
+   (FastAPI + pytest + canlı uvicorn + curl doğrulaması) ve ardından FULL-STACK görevini
+   (backend + fetch'li frontend + testler + çift sunuculu canlı doğrulama) uçtan uca
+   kendi başına tamamladı — dogrulama=True, 3/3 pytest, canlı screenshot kanıtı
+   (frontend backend'den geleni gösterdi). Sınavlardan çıkan korumalar: run_shell
+   arka plan başlatıcı reddi (pipe kilidi), örnekli start_server hatası, debelenme
+   detektörünün start_server'ı sayması. Not: Codegen bazen işi yarım bırakıp
+   Validator'a devrediyor (rol kayması — Validator yeni dosya yazarak telafi etti).
+3. **Codegen'i güçlü kod modeline al:** Nemotron çalışıyor ama savurgan/dalgın
+   (vite.config unutma, rol kayması, port sapması). NIM'de Qwen2.5-Coder benzeri
+   modeli tutarlılık testinden geçirip `FCC_MODEL_CODEGEN`'e ata → kalite + verim.
 4. Faz 5 kalanları: görev kuyruğu, Docker sandbox'ı varsayılan yapmak, model karşılaştırma raporu.
 5. Faz 6 (planlandı, başlanmadı): API bağlama yeteneği — sır yönetimi (.env enjeksiyonu),
    pip/npm bağımlılık politikası, Docker'da seçmeli ağ.
