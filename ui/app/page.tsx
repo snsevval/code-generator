@@ -31,6 +31,7 @@ type Durum = {
   onay_bekleyen: { id: number; gorev: string } | null;
   kullanim: Kullanim | null;
   klasor: string | null;
+  onizleme_url: string | null;
 };
 
 type Saglik = { api: boolean; proxy: boolean };
@@ -196,6 +197,43 @@ export default function Anasayfa() {
     } catch {
       /* durum yoklaması sürüyor */
     }
+  }
+
+  const [onizlemeHatasi, setOnizlemeHatasi] = useState<string | null>(null);
+  const [onizlemeYukleniyor, setOnizlemeYukleniyor] = useState(false);
+
+  // package.json'lı proje mi? (Vite/dev-server gerektirir)
+  const projeKlasoru = useMemo(() => {
+    const pkg = dosyalar.find((d) => d.ad.endsWith("package.json"));
+    if (!pkg) return null;
+    const dizin = pkg.ad.includes("/") ? pkg.ad.slice(0, pkg.ad.lastIndexOf("/")) : "";
+    return dizin; // "" = kök, "counter-app" = alt klasör
+  }, [dosyalar]);
+
+  async function onizlemeBaslat() {
+    if (projeKlasoru === null) return;
+    setOnizlemeHatasi(null);
+    setOnizlemeYukleniyor(true);
+    try {
+      const y = await fetch(`${API}/api/onizle-baslat`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ calisma_dizini: projeKlasoru }),
+      });
+      const veri = await y.json();
+      if (!y.ok) throw new Error(veri?.detail ?? `HTTP ${y.status}`);
+      await durumuGetir();
+      window.open(veri.url, "_blank", "noopener");
+    } catch (err) {
+      setOnizlemeHatasi(err instanceof Error ? err.message : String(err));
+    } finally {
+      setOnizlemeYukleniyor(false);
+    }
+  }
+
+  async function onizlemeDurdur() {
+    await fetch(`${API}/api/onizle-durdur`, { method: "POST" }).catch(() => {});
+    await durumuGetir();
   }
 
   async function gorevBaslat(e: React.FormEvent) {
@@ -534,6 +572,46 @@ export default function Anasayfa() {
                   <h2>Çıktı Dosyaları</h2>
                   <span className={styles.karakterSayaci}>{dosyalar.length}</span>
                 </div>
+
+                {projeKlasoru !== null && (
+                  <div className={styles.onizlemeSatiri}>
+                    {durum.onizleme_url ? (
+                      <>
+                        <a
+                          className={styles.onizleAcik}
+                          href={durum.onizleme_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          ● Canlı: {durum.onizleme_url}
+                        </a>
+                        <button type="button" className={styles.onizleDurdur} onClick={onizlemeDurdur}>
+                          Durdur
+                        </button>
+                      </>
+                    ) : (
+                      <button
+                        type="button"
+                        className={styles.onizleBaslat}
+                        onClick={onizlemeBaslat}
+                        disabled={onizlemeYukleniyor}
+                      >
+                        {onizlemeYukleniyor ? (
+                          <>
+                            <Spinner /> Sunucu başlatılıyor…
+                          </>
+                        ) : (
+                          "▶ Canlı Önizle (dev sunucusu)"
+                        )}
+                      </button>
+                    )}
+                  </div>
+                )}
+                {onizlemeHatasi && (
+                  <p className={styles.hata} role="alert">
+                    Önizleme: {onizlemeHatasi}
+                  </p>
+                )}
                 <ul className={styles.dosyaListe}>
                   {dosyalar.map((d) => (
                     <li key={d.ad}>

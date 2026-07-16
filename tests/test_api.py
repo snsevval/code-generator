@@ -160,6 +160,36 @@ def test_dosya_klasor_yokken_404(istemci):
     assert istemci.get("/api/dosyalar").json() == {"dosyalar": []}
 
 
+def test_onizle_baslat_package_json_yoksa_400(istemci, tmp_path):
+    (tmp_path / "index.html").write_text("<h1>x</h1>", encoding="utf-8")
+    api.DURUM.klasor_yolu = tmp_path
+    yanit = istemci.post("/api/onizle-baslat", json={"calisma_dizini": ""})
+    assert yanit.status_code == 400
+    assert "package.json" in yanit.json()["detail"]
+
+
+def test_onizle_baslat_klasor_yokken_404(istemci):
+    api.DURUM.klasor_yolu = None
+    assert istemci.post("/api/onizle-baslat", json={}).status_code == 404
+
+
+def test_onizle_baslat_traversal_reddedilir(istemci, tmp_path):
+    ic = tmp_path / "ic"
+    ic.mkdir()
+    api.DURUM.klasor_yolu = ic
+    (tmp_path / "package.json").write_text("{}", encoding="utf-8")  # dışarıda
+    yanit = istemci.post("/api/onizle-baslat", json={"calisma_dizini": ".."})
+    assert yanit.status_code == 404
+
+
+def test_onizle_durdur_hep_calisir(istemci):
+    assert istemci.post("/api/onizle-durdur").json() == {"durduruldu": True}
+
+
+def test_durum_onizleme_url_alani(istemci):
+    assert "onizleme_url" in istemci.get("/api/durum").json()
+
+
 def test_onizle_cok_dosyali_site_sunar(istemci, tmp_path):
     (tmp_path / "index.html").write_text(
         '<link rel="stylesheet" href="style.css"><h1>Merhaba</h1>'

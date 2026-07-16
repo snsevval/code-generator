@@ -58,7 +58,14 @@ class OnayKarari(BaseModel):
     devam: bool
 
 
+class OnizlemeIstegi(BaseModel):
+    # Görev klasörüne göreli çalışma dizini (Vite projesi alt klasördeyse, ör. "counter-app")
+    calisma_dizini: str = ""
+
+
 ONAY_ZAMAN_ASIMI_SN = 3600.0  # onay bu süre içinde gelmezse zincir güvenli tarafta durur
+ONIZLEME_PORT = 4173  # canlı önizleme sunucusunun sabit portu
+ONIZLEME_KOMUTU = f"npm run dev -- --port {ONIZLEME_PORT} --host 127.0.0.1"
 
 
 class _Durum:
@@ -80,6 +87,9 @@ class _Durum:
         # Görevin izole çalışma klasörü (UI'de gösterilir + dosya servisi kökü)
         self.klasor: str | None = None
         self.klasor_yolu: Path | None = None
+        # Canlı önizleme sunucusu (doğrulama sunucularından ayrı, tek aktif, açık kalır)
+        self.onizleme_yoneticisi = None
+        self.onizleme_url: str | None = None
 
 
 DURUM = _Durum()
@@ -190,6 +200,7 @@ def durum():
         "onay_bekleyen": DURUM.onay_bekleyen,
         "kullanim": getattr(DURUM.istemci, "kullanim", None),
         "klasor": DURUM.klasor,
+        "onizleme_url": DURUM.onizleme_url,
     }
 
 
@@ -250,6 +261,49 @@ def onizle(dosya_yolu: str):
         raise HTTPException(404, "dosya bulunamadı")
     tur, _ = mimetypes.guess_type(str(hedef))
     return FileResponse(hedef, media_type=tur or "text/plain")
+
+
+@app.post("/api/onizle-baslat")
+def onizle_baslat(istek: OnizlemeIstegi):
+    """Vite/dev-server gerektiren projeyi canlı başlatır (açık kalır).
+
+    Doğrulama sunucularından ayrı — tek aktif önizleme: yeni başlatınca eski
+    kapanır (sızıntı yok). package.json içeren projeler için UI'deki 'Canlı
+    Önizle' düğmesi bunu çağırır; node_modules kurulu olmalı.
+    """
+    from orchestrator.sunucu import SunucuYoneticisi
+
+    if DURUM.klasor_yolu is None:
+        raise HTTPException(404, "aktif bir görev klasörü yok")
+    kok = DURUM.klasor_yolu.resolve()
+    hedef = (kok / istek.calisma_dizini).resolve()
+    if not hedef.is_relative_to(kok) or not hedef.is_dir():
+        raise HTTPException(404, "çalışma dizini bulunamadı")
+    if not (hedef / "package.json").is_file():
+        raise HTTPException(400, "bu klasörde package.json yok (dev sunucusu gerektirmez)")
+
+    # Önceki önizlemeyi kapat (tek aktif)
+    _onizlemeyi_durdur()
+    yonetici = SunucuYoneticisi(hedef)
+    mesaj = yonetici.baslat(ONIZLEME_KOMUTU, ONIZLEME_PORT)
+    if mesaj.startswith("HATA"):
+        raise HTTPException(400, mesaj)
+    DURUM.onizleme_yoneticisi = yonetici
+    DURUM.onizleme_url = f"http://localhost:{ONIZLEME_PORT}"
+    return {"url": DURUM.onizleme_url}
+
+
+@app.post("/api/onizle-durdur")
+def onizle_durdur():
+    _onizlemeyi_durdur()
+    return {"durduruldu": True}
+
+
+def _onizlemeyi_durdur() -> None:
+    if DURUM.onizleme_yoneticisi is not None:
+        DURUM.onizleme_yoneticisi.hepsini_durdur()
+        DURUM.onizleme_yoneticisi = None
+        DURUM.onizleme_url = None
 
 
 @app.get("/api/saglik")

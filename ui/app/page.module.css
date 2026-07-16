@@ -682,6 +682,72 @@
   background: var(--soluk);
 }
 
+/* --- Canlı önizleme --- */
+
+.onizlemeSatiri {
+  display: flex;
+  align-items: center;
+  gap: var(--aralik-2);
+  flex-wrap: wrap;
+  margin-bottom: var(--aralik-3);
+  padding-bottom: var(--aralik-3);
+  border-bottom: 1px solid var(--kenar);
+}
+
+.onizleBaslat {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--aralik-2);
+  padding: var(--aralik-2) var(--aralik-3);
+  min-height: 40px;
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--mor) 50%, transparent);
+  background: color-mix(in srgb, var(--mor) 12%, transparent);
+  color: var(--mor-acik);
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 150ms ease-out;
+}
+
+.onizleBaslat:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--mor) 20%, transparent);
+}
+
+.onizleBaslat:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.onizleAcik {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--font-kod), ui-monospace, monospace;
+  font-size: 0.78rem;
+  color: var(--basari);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.onizleAcik:hover {
+  text-decoration: underline;
+}
+
+.onizleDurdur {
+  padding: var(--aralik-1) var(--aralik-3);
+  min-height: 40px;
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--tehlike) 45%, transparent);
+  background: transparent;
+  color: var(--tehlike);
+  font: inherit;
+  font-size: 0.78rem;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
 .spinner {
   animation: don 0.9s linear infinite;
   color: var(--mor-acik);
