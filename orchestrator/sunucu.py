@@ -27,11 +27,25 @@ PORT_BEKLEME_SN = 60.0  # sunucunun port'u dinlemeye başlaması için azami sü
 LOG_KUYRUK_KARAKTER = 4000  # server_log'un döndürdüğü son log uzunluğu
 
 
-def port_dinliyor_mu(port: int, host: str = "127.0.0.1") -> bool:
-    """Port'a TCP bağlantısı kurulabiliyor mu (sunucu ayakta mı)?"""
-    with contextlib.closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as s:
-        s.settimeout(1.0)
-        return s.connect_ex((host, port)) == 0
+def port_dinliyor_mu(port: int, host: str | None = None) -> bool:
+    """Port'a TCP bağlantısı kurulabiliyor mu (sunucu ayakta mı)?
+
+    Hem IPv4 (127.0.0.1) hem IPv6 (::1) denenir: Vite/Node gibi araçlar
+    ``localhost``'u varsayılan olarak IPv6 ``::1``'e bağlar, yalnızca IPv4'e
+    bakmak sunucuyu "kapalı" sanmaya yol açar (canlıda Vite bu yüzden
+    algılanamadı).
+    """
+    hedefler = [host] if host else ["127.0.0.1", "::1"]
+    for h in hedefler:
+        aile = socket.AF_INET6 if ":" in h else socket.AF_INET
+        try:
+            with contextlib.closing(socket.socket(aile, socket.SOCK_STREAM)) as s:
+                s.settimeout(1.0)
+                if s.connect_ex((h, port)) == 0:
+                    return True
+        except OSError:
+            continue
+    return False
 
 
 @dataclass
