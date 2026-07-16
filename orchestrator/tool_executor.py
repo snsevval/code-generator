@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import difflib
 import os
+import re
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
@@ -175,7 +176,10 @@ TOOL_TANIMLARI = [
         "description": (
             "Bir HTML dosyasını headless tarayıcıda açar: sayfa başlığını, konsol "
             "hatalarını ve görsel kalite analizini döndürür, ekran görüntüsü alır. "
-            "HTML/arayüz dosyası ürettiysen veya doğruluyorsan mutlaka kullan."
+            "HTML/arayüz dosyası ürettiysen veya doğruluyorsan mutlaka kullan. "
+            "Vite/Next gibi dev-server projelerinde dosya yolu VERME — önce "
+            "start_server ile sunucuyu başlat, sonra http://localhost:<port> ver "
+            "(dosya yolu file:// ile açılır; modüller yüklenmez, hatalar gizlenir)."
         ),
         "input_schema": {
             "type": "object",
@@ -428,6 +432,61 @@ class ToolExecutor:
         mesaj = self.sunucu_yoneticisi.log(port)
         return ToolSonucu(not mesaj.startswith("HATA"), _kes(mesaj))
 
+    def _dev_server_gerekli(self, dosya: Path, path: str) -> str | None:
+        """file:// ile açılması anlamsız sayfaları yakalar (Vite/Next vb.).
+
+        Dev-server projelerinde modüller file:// altında YÜKLENMEZ; konsol temiz
+        görünür, "React is not defined" gibi hatalar hiç oluşmaz ve Validator
+        yanlış "geçti" der (canlıda görüldü). Bu yüzden iki işaretten biri varsa
+        dosya yoluyla açma mekanik olarak reddedilir ve modele doğru akış söylenir:
+
+        1. Dosyanın dizininden workspace köküne dek en yakın package.json bir
+           dev-server'a işaret ediyorsa (``"dev"`` scripti veya vite/next/react-scripts)
+        2. HTML, kökten mutlak (``src="/..."``) bir ES modülü yüklüyorsa
+           (file:// altında bu yol dosya sistemi köküne çözülür ve kırılır)
+        """
+        if dosya.suffix.lower() not in (".html", ".htm"):
+            return None
+
+        # 1) Yakın package.json dev-server'a mı işaret ediyor?
+        dizin = dosya.parent
+        while True:
+            paket = dizin / "package.json"
+            if paket.is_file():
+                icerik = paket.read_text(encoding="utf-8", errors="replace").lower()
+                if '"dev"' in icerik or any(
+                    im in icerik for im in ("vite", "next", "react-scripts")
+                ):
+                    return (
+                        f"HATA: {path} bir dev-server projesine ait görünüyor "
+                        f"({paket.relative_to(self.workspace).as_posix()} bulundu). "
+                        "Dosyayı file:// ile açmak modülleri YÜKLEMEZ — konsol temiz "
+                        "görünse de sayfa gerçekte çalışmıyor olabilir. Doğru akış: "
+                        "1) bağımlılık kurulmadıysa run_shell ile kur "
+                        "('npm install', timeout=600), 2) start_server ile dev "
+                        "sunucusunu başlat (örn. 'npm run dev', Vite portu 5173), "
+                        "3) check_page http://localhost:<port> ile doğrula, "
+                        "4) bitince stop_server."
+                    )
+                break  # en yakın package.json karar verdi; yukarı bakma
+            if dizin == self.workspace:
+                break
+            dizin = dizin.parent
+
+        # 2) Kökten mutlak modül scripti file:// altında çözülmez
+        html = dosya.read_text(encoding="utf-8", errors="replace")[:64_000]
+        for etiket in re.findall(r"<script\b[^>]*>", html, re.IGNORECASE):
+            if "module" in etiket and re.search(r"""src=["']/(?!/)""", etiket):
+                return (
+                    f"HATA: {path} kökten mutlak yollu bir ES modülü yüklüyor "
+                    f"(örn. {etiket[:120]}). file:// altında '/...' yolu çözülmez; "
+                    "sayfa bir sunucu üzerinden doğrulanmalı. Akış: start_server ile "
+                    "sunucu başlat (dev-server projesiyse 'npm run dev', düz statik "
+                    "siteyse 'python -m http.server 8000'), sonra "
+                    "check_page http://localhost:<port> kullan."
+                )
+        return None
+
     def check_page(self, path: str) -> ToolSonucu:
         """Sayfayı headless tarayıcıda açar: hatalar + screenshot + görsel analiz.
 
@@ -446,6 +505,9 @@ class ToolExecutor:
                 return ToolSonucu(False, f"HATA: {e}")
             if not tam.is_file():
                 return ToolSonucu(False, f"HATA: dosya bulunamadı: {path!r}")
+            engel = self._dev_server_gerekli(tam, path)
+            if engel:
+                return ToolSonucu(False, engel)
             hedef_url = tam.as_uri()
             ekran_adi = tam.stem
 

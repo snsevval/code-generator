@@ -91,14 +91,16 @@ işlerde KAPALI tut — imajda node yok).
 7. Sunucu sızıntı önleme: görev sonunda (hata olsa da) tüm arka plan süreçleri kapanır
 8. Tur sınırı 35 + validator işaret unutursa netleştirme turu
 9. Git: görev klasörü kendi reposunu kurar (üst repoya commit atamaz)
+10. check_page dev-server koruması: Vite/Next projesi `file://` ile doğrulanamaz —
+    araç reddeder, canlı URL akışını (start_server → http://localhost) tarif eder
 
 ## KALDIĞIMIZ YER — sıradaki adımlar (öncelik sırasıyla)
 
-1. **check_page'in Vite açığı:** Model Vite projesini `file://` ile kontrol ediyor —
-   orada modül yüklenmediği için hatalar (örn. "React is not defined") görünmüyor,
-   Validator yanlış "geçti" diyor. Çözüm: dev-server projelerinde doğrulama
-   `start_server` + `check_page http://localhost:PORT` üzerinden yapılmalı
-   (prompt + belki mekanik yönlendirme). **Kotasız, en yüksek öncelik.**
+1. ~~check_page'in Vite açığı~~ **KAPATILDI (2026-07-16):** dev-server projesinde
+   (yakın package.json'da "dev"/vite/next/react-scripts) veya kökten mutlak ES modülü
+   yüklerken check_page'e dosya yolu verilirse mekanik red + doğru akış mesajı
+   (start_server → http://localhost:<port>). Validator promptu da güncellendi;
+   6 yeni tarayıcısız test.
 2. **Codegen'i güçlü kod modeline al:** Nemotron karmaşık koreografide zorlanıyor
    (vite.config unutma, React import eksik). NIM'de Qwen2.5-Coder benzeri modeli
    tutarlılık testinden geçirip `FCC_MODEL_CODEGEN`'e ata.

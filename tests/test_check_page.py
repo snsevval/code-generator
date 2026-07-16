@@ -101,6 +101,74 @@ def test_olmayan_dosya(tmp_path):
     assert "bulunamadı" in sonuc.cikti
 
 
+# --- dev-server koruması (tarayıcısız: koruma playwright'tan önce devreye girer) ---
+
+_VITE_HTML = (
+    '<!doctype html><html><body><div id="root"></div>'
+    '<script type="module" src="/src/main.jsx"></script></body></html>'
+)
+
+
+def test_vite_projesi_file_ile_acilamaz(tmp_path):
+    """package.json vite'a işaret ediyorsa file:// doğrulaması reddedilir."""
+    (tmp_path / "package.json").write_text(
+        '{"scripts": {"dev": "vite"}, "devDependencies": {"vite": "^5.0.0"}}',
+        encoding="utf-8",
+    )
+    (tmp_path / "index.html").write_text(_VITE_HTML, encoding="utf-8")
+    sonuc = ToolExecutor(tmp_path).check_page("index.html")
+    assert not sonuc.ok
+    assert "start_server" in sonuc.cikti  # modele doğru akış söylenir
+    assert "http://localhost" in sonuc.cikti
+
+
+def test_alt_klasordeki_html_ust_package_jsonu_gorur(tmp_path):
+    """package.json köke, HTML alt klasöre yazılsa da koruma çalışır."""
+    (tmp_path / "package.json").write_text('{"scripts": {"dev": "next dev"}}', encoding="utf-8")
+    alt = tmp_path / "public"
+    alt.mkdir()
+    (alt / "index.html").write_text("<html><body>x</body></html>", encoding="utf-8")
+    sonuc = ToolExecutor(tmp_path).check_page("public/index.html")
+    assert not sonuc.ok
+    assert "start_server" in sonuc.cikti
+
+
+def test_mutlak_modul_scripti_package_json_olmadan_da_yakalanir(tmp_path):
+    """package.json yoksa bile src="/..." modülü file:// altında kırılır — reddedilir."""
+    (tmp_path / "index.html").write_text(_VITE_HTML, encoding="utf-8")
+    sonuc = ToolExecutor(tmp_path).check_page("index.html")
+    assert not sonuc.ok
+    assert "start_server" in sonuc.cikti
+
+
+def test_statik_sayfa_engellenmez(tmp_path):
+    """Göreli yollu düz statik sayfa korumaya takılmaz."""
+    (tmp_path / "sayfa.html").write_text(
+        '<!doctype html><html><body><script src="app.js"></script></body></html>',
+        encoding="utf-8",
+    )
+    executor = ToolExecutor(tmp_path)
+    assert executor._dev_server_gerekli(tmp_path / "sayfa.html", "sayfa.html") is None
+
+
+def test_dev_sinyalsiz_package_json_engellenmez(tmp_path):
+    """package.json var ama dev-server işareti yoksa (düz node paketi) engel yok."""
+    (tmp_path / "package.json").write_text('{"name": "arac", "version": "1.0.0"}', encoding="utf-8")
+    (tmp_path / "sayfa.html").write_text("<html><body>x</body></html>", encoding="utf-8")
+    executor = ToolExecutor(tmp_path)
+    assert executor._dev_server_gerekli(tmp_path / "sayfa.html", "sayfa.html") is None
+
+
+def test_protokol_goreli_url_yanlis_alarm_vermez(tmp_path):
+    """src="//cdn..." (protokol-göreli) kökten mutlak sayılmaz."""
+    (tmp_path / "s.html").write_text(
+        '<html><body><script type="module" src="//cdn.ornek.com/x.js"></script></body></html>',
+        encoding="utf-8",
+    )
+    executor = ToolExecutor(tmp_path)
+    assert executor._dev_server_gerekli(tmp_path / "s.html", "s.html") is None
+
+
 @tarayici_gerekli
 def test_gorsel_analiz_rapora_eklenir(tmp_path, monkeypatch):
     (tmp_path / "s.html").write_text("<html><body>x</body></html>", encoding="utf-8")

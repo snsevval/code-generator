@@ -181,3 +181,20 @@ durdurulabiliyor. React/Next dev sunucusu ve canlı backend doğrulamasının ki
 - [x] 11 test (gerçek http.server ile yaşam döngüsü + sızıntısızlık); uçtan uca kanıt:
       start_server → check_page(URL, Gemini analiz) → stop_server, port serbest kaldı
 - [ ] Sonraki: gerçek Next.js/Vite projesini uçtan uca ürettirip canlı doğrulama koşusu
+
+## Faz 8.1 — check_page'in Vite açığı kapatıldı (2026-07-16)
+
+Canlıda görülen kaza: model Vite projesini `file://` ile kontrol ediyordu; modüller
+yüklenmediği için "React is not defined" gibi hatalar hiç oluşmuyor, konsol temiz
+görünüyor ve Validator yanlış "geçti" diyordu.
+
+- [x] **Mekanik koruma** (`ToolExecutor._dev_server_gerekli`): check_page'e dosya yolu
+      verildiğinde iki işaretten biri varsa açılış reddedilir ve modele doğru akış
+      (npm install → start_server → check_page http://localhost:<port>) söylenir:
+      1) yakın package.json dev-server'a işaret ediyor ("dev" scripti / vite / next /
+      react-scripts), 2) HTML kökten mutlak (`src="/..."`) ES modülü yüklüyor
+- [x] Prompt güncellemeleri: check_page araç açıklaması + validator sistem promptu
+      (dev-server projesinde dosya yolu verme, canlı URL kullan)
+- [x] 6 yeni test (tarayıcısız/kotasız: koruma playwright'tan önce devreye girer) —
+      toplam 152 geçiyor; statik sayfa / dev-sinyalsiz package.json / protokol-göreli
+      URL yanlış alarm vermiyor
