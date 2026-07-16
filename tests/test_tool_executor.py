@@ -228,6 +228,36 @@ def test_shell_bos_komut(executor):
     assert not executor.run_shell("").ok
 
 
+@pytest.mark.parametrize(
+    "komut",
+    [
+        "start /b uvicorn backend:app --port 8123",
+        "START /B python sunucu.py",
+        "nohup python sunucu.py",
+        "python -m http.server 8000 &",
+    ],
+)
+def test_shell_arka_plan_baslatici_reddedilir(executor, komut):
+    # Torun süreç pipe'ı kilitler (canlıda görev dondu); start_server'a yönlendirilmeli
+    sonuc = executor.run_shell(komut)
+    assert not sonuc.ok
+    assert "start_server" in sonuc.cikti
+
+
+def test_shell_ve_zinciri_serbest(executor):
+    # && zinciri arka plan başlatıcı değildir, engellenmemeli
+    sonuc = executor.run_shell('python -c "print(1)" && python -c "print(2)"')
+    assert sonuc.ok, sonuc.cikti
+
+
+def test_start_server_port_eksik_ornekli_hata(executor):
+    sonuc = executor.calistir("start_server", {"command": "uvicorn backend:app --port 8123"})
+    assert not sonuc.ok
+    assert "port" in sonuc.cikti
+    assert '"port": 8123' in sonuc.cikti  # birebir kopyalanabilir örnek
+    assert "Komutu değiştirme" in sonuc.cikti  # kurcalama davranışını kessin
+
+
 def test_shell_cok_satirli_komut_reddedilir(executor):
     # Windows cmd çok satırlı komutu sessizce bozuyor; mekanik olarak reddedilmeli
     sonuc = executor.run_shell('python -c "\nimport os\nprint(1)\n"')

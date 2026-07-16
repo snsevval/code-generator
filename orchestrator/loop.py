@@ -194,7 +194,11 @@ class Orkestrator:
                         # (düzelt → yeniden test et döngüsü)
                         tekrar_sayaci.clear()
                         pespese_kabuk = 0
-                    elif blok["name"] == "run_shell":
+                    elif blok["name"] == "run_shell" or (
+                        blok["name"] == "start_server" and not sonuc.ok
+                    ):
+                        # Başarısız start_server tekrarları da debelenmedir
+                        # (canlıda validator port'suz çağrıyı ~12 kez kurcaladı)
                         pespese_kabuk += 1
                     else:
                         pespese_kabuk = 0

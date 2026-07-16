@@ -27,6 +27,14 @@ MAX_CIKTI_UZUNLUGU = 32_000  # karakter; shell çıktısı bundan uzunsa kesilir
 MAX_LISTE_DOSYASI = 500  # list_files en çok bu kadar dosya gösterir
 VARSAYILAN_ZAMAN_ASIMI_SN = 30.0
 
+# run_shell'de arka plan süreç başlatıcıları yasak: başlatılan torun süreç
+# stdout pipe'ını açık tutup run_shell'i SONSUZ kilitliyor (canlıda validator
+# 'start /b uvicorn' ile görevi dondurdu, elle kurtarıldı). Doğru araç: start_server.
+_ARKA_PLAN_BASLATICI = re.compile(
+    r"(^|[\s&|;(])(start\s+/b|nohup\s)\b|(?<!&)&\s*$",
+    re.IGNORECASE,
+)
+
 # list_files'ın atladığı klasörler (üretilen/araç çıktısı içerikler)
 GIZLENEN_KLASORLER = {
     ".git",
@@ -407,13 +415,27 @@ class ToolExecutor:
         return ToolSonucu(True, f"{path} {etiket}.\n\n{_kes(diff)}")
 
     def start_server(self, command: str, port: int) -> ToolSonucu:
+        # Örnekli hata: canlıda model 'port'u vermeyi unutup komutu kurcalayarak
+        # ~12 tur debelendi — mesaj doğru çağrıyı birebir göstermeli
+        ornek = '{"command": "uvicorn backend:app --port 8123", "port": 8123}'
         if not command or not command.strip():
-            return ToolSonucu(False, "HATA: command boş olamaz")
+            return ToolSonucu(
+                False, f"HATA: 'command' eksik. İki parametre de zorunlu — örnek: {ornek}"
+            )
         try:
             port = int(port)
         except (TypeError, ValueError):
-            return ToolSonucu(False, "HATA: port bir sayı olmalı")
+            return ToolSonucu(
+                False,
+                "HATA: 'port' parametresi eksik ya da sayı değil. Komutu değiştirme — "
+                f"aynı komuta 'port' alanını ekle. Örnek: {ornek}",
+            )
         mesaj = self.sunucu_yoneticisi.baslat(command, port)
+        if not mesaj.startswith("HATA") and str(port) not in command:
+            mesaj += (
+                f"\n[not: komut metninde {port} geçmiyor — sunucu farklı bir portta "
+                "açıldıysa bağlantı kurulamayabilir]"
+            )
         return ToolSonucu(not mesaj.startswith("HATA"), mesaj)
 
     def stop_server(self, port: int) -> ToolSonucu:
@@ -610,6 +632,14 @@ class ToolExecutor:
                 "HATA: çok satırlı komut desteklenmiyor. Çok satırlı kod çalıştırmak "
                 "için önce write_file ile bir script dosyası yaz, sonra onu tek "
                 "satırlık komutla çalıştır (örn. 'python script.py').",
+            )
+        if _ARKA_PLAN_BASLATICI.search(command):
+            return ToolSonucu(
+                False,
+                "HATA: run_shell ile arka plan süreci başlatma (start /b, nohup, "
+                "sondaki &) desteklenmiyor — süreç asılı kalır. Sunucu başlatmak için "
+                "start_server aracını kullan; örnek girdi: "
+                '{"command": "uvicorn backend:app --port 8123", "port": 8123}',
             )
         zaman_asimi = timeout if timeout and timeout > 0 else VARSAYILAN_ZAMAN_ASIMI_SN
         try:
