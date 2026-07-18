@@ -42,6 +42,9 @@ class AjanTanimi:
     # True ise write_file yalnızca var olmayan dosyalara izinli — orkestratör
     # mekanik olarak zorlar (prompt yasağı tek başına yetmiyor, canlıda görüldü)
     mevcut_dosyayi_degistiremez: bool = False
+    # Bu ajanın cevabı için azami çıktı token'ı (None: istemci varsayılanı).
+    # Reviewer gibi kısa-tutulması gereken roller için üst sınır.
+    max_tokens: int | None = None
 
     @property
     def model(self) -> str:
@@ -104,13 +107,13 @@ AJANLAR: dict[str, AjanTanimi] = {
     "debugger": AjanTanimi(
         ad="debugger",
         sistem_prompt=_ORTAK
-        + " Rolün: DEBUGGER. Sana başarısız test/doğrulama çıktısı verilecek. İLK "
-        "işin hatayı KENDİN yeniden üretmek: ilgili testi/komutu run_shell ile "
-        "çalıştır ve hatayı gör. Hatayı yeniden ÜRETEMİYORSAN hiçbir dosyayı "
-        "DEĞİŞTİRME; 'hata yeniden üretilemedi, kod çalışıyor görünüyor' diye "
-        "raporla ve bitir. Hata gerçekse: kök nedeni bul, düzeltmeyi edit_file ile "
-        "uygula (tüm dosyayı yeniden yazma), run_shell ile düzeltmenin tuttuğunu "
-        "göster. Semptomu değil nedeni düzelt.",
+        + " Rolün: DEBUGGER. Sana başarısız test/doğrulama çıktısı verilecek. Hata "
+        "mesajı deterministik bir sistemden geliyorsa (assert satırı, entegrasyon "
+        "raporu) ona GÜVEN — yeniden üretmeye çalışma. run_shell aracın varsa ve mesaj "
+        "belirsizse hatayı bir kez yeniden üretebilirsin; yoksa doğrudan kök nedene git. "
+        "Kök nedeni bul, düzeltmeyi edit_file ile uygula (tüm dosyayı yeniden yazma) ve "
+        "DUR — doğrulamayı sistem yeniden yapar. Semptomu değil nedeni düzelt; testi "
+        "gevşetme, ortam/paket kurcalama.",
         araclar=("list_files", "search_files", "read_file", "write_file", "edit_file", "run_shell", "check_page", "start_server", "stop_server", "server_log"),
     ),
     "decomposer": AjanTanimi(
@@ -126,10 +129,17 @@ AJANLAR: dict[str, AjanTanimi] = {
     "reviewer": AjanTanimi(
         ad="reviewer",
         sistem_prompt=_ORTAK
-        + " Rolün: REVIEWER. Üretilen kodu read_file ile incele ve kısa bir inceleme "
-        "raporu yaz: doğruluk riskleri, basitleştirme fırsatları, eksik testler. "
-        "Dosya değiştirme; yalnızca raporla.",
-        araclar=("list_files", "search_files", "read_file", "check_page"),
+        + " Rolün: REVIEWER — KANITA BAĞLI, salt-okunur, KISA. Üretilen kodu incele. "
+        "Her dosyayı EN FAZLA BİR KEZ read_file ile oku (gerekmiyorsa hiç okuma). "
+        "YALNIZCA kanıtla (dosya:satır) gösterebildiğin GERÇEK sorunları yaz; kanıt "
+        "gösteremediğin hiçbir sorunu YAZMA, tahmin/genel tavsiye/checklist EKLEME. "
+        "Cevabın SADECE şu JSON olsun, başka hiçbir metin/markdown ekleme:\n"
+        '{"approved": true, "issues": [], "evidence": ["backend.py:12 ...", "test_backend.py:5 ..."]}\n'
+        "approved: gerçek/kritik sorun yoksa true. issues: her biri 'dosya:satır — kısa "
+        "açıklama' biçiminde ve KANITLI (yoksa boş liste []). evidence: incelediğin "
+        "dosya:satır referansları. Kısa tut.",
+        araclar=("list_files", "read_file"),
+        max_tokens=4000,
     ),
 }
 

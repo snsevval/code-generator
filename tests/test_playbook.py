@@ -40,17 +40,26 @@ def test_playbook_tespiti(gorev, beklenen):
 
 
 def test_fullstack_tarifi_kritik_bilgiyi_icerir():
-    """Kullanıcının artık yazmak zorunda olmadığı her şey tarifte olmalı."""
+    """Kullanıcının artık yazmak zorunda olmadığı her şey tarifte olmalı.
+
+    TEK-ORIGIN file-only akış: model sunucu/tarayıcı ÇALIŞTIRMAZ; backend index.html'i
+    `/` kökünde servis eder, frontend GÖRELİ fetch kullanır — sabit port/CORS yok.
+    """
     metin, ad = gorevi_zenginlestir("full-stack sayaç uygulaması istiyorum")
     assert ad == "fullstack"
-    assert str(BACKEND_PORT) in metin  # port konvansiyonu
-    assert str(FRONTEND_PORT) in metin
-    assert "start_server" in metin  # doğru araç
-    assert '"port"' in metin  # örnekli çağrı (port debelenmesine karşı)
-    assert "stop_server" in metin  # temizlik
-    assert "check_page" in metin  # canlı doğrulama
-    assert "CORSMiddleware" in metin  # iki katman konuşabilsin
+    assert "FileResponse" in metin  # backend index.html'i servis eder (tek-origin)
+    assert "GÖRELİ" in metin  # fetch('/todos') — sabit host/port yazılmaz
     assert "TestClient" in metin  # test yolu
+    assert "fetch" in metin  # frontend backend'e BAĞLANMALI
+    assert "DOM" in metin  # veriyi ekrana bas (entegrasyon)
+    # Tek-origin: sabit portlar ve CORS tariften çıktı
+    assert str(BACKEND_PORT) not in metin
+    assert "CORSMiddleware" not in metin
+    # Model sunucu/tarayıcı çalıştırmaz — bu araçlar tarifte olmamalı
+    assert "start_server" not in metin
+    assert "check_page" not in metin
+    # De-prime: halüsinasyon tetikleyicisini adıyla anmıyoruz
+    assert "docker" not in metin.lower()
 
 
 def test_vite_tarifi_bilinen_tuzaklari_kapatir():

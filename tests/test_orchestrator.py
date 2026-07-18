@@ -86,6 +86,35 @@ def test_ajan_hatali_tool_sonucu_is_error_ile_doner(tmp_path):
     assert "HATA" in sonuc["content"]
 
 
+def test_string_tool_input_dict_e_normalize_edilir(tmp_path):
+    # Kimi NIM/OpenRouter kod modelleri tool_use.input'u JSON string döndürüyor;
+    # orkestratör bunu dict'e çevirip normal işlemeli (yoksa AttributeError).
+    senaryo = [
+        tool_cevap("write_file", '{"path": "a.txt", "content": "merhaba"}'),
+        metin_cevap("yazdım"),
+    ]
+    ork, istemci = orkestrator_kur(tmp_path, senaryo)
+
+    ork.ajan_calistir(AJANLAR["codegen"], "a.txt oluştur")
+
+    assert (ork.executor.workspace / "a.txt").read_text(encoding="utf-8") == "merhaba"
+    assert istemci.istekler[1]["messages"][-1]["content"][0]["is_error"] is False
+
+
+def test_bozuk_string_tool_input_cokmeden_bos_dict_olur(tmp_path):
+    # Geçersiz JSON string gelirse: çökme yok, boş dict'e düşer, araç düzgün hata verir
+    senaryo = [
+        tool_cevap("write_file", "{bozuk json"),
+        metin_cevap("olmadı"),
+    ]
+    ork, istemci = orkestrator_kur(tmp_path, senaryo)
+
+    ork.ajan_calistir(AJANLAR["codegen"], "yaz")
+
+    # AttributeError fırlamamalı; araç zorunlu alan eksikliğiyle hata döndürmeli
+    assert istemci.istekler[1]["messages"][-1]["content"][0]["is_error"] is True
+
+
 def test_ajan_izinsiz_araci_alamaz(tmp_path):
     ork, istemci = orkestrator_kur(tmp_path, [metin_cevap("plan")])
     ork.ajan_calistir(AJANLAR["planner"], "planla")
@@ -93,6 +122,23 @@ def test_ajan_izinsiz_araci_alamaz(tmp_path):
     gonderilen_araclar = {t["name"] for t in istemci.istekler[0]["tools"]}
     # planner yalnızca okuma/arama yapabilir
     assert gonderilen_araclar == {"list_files", "search_files", "read_file"}
+
+
+def test_reviewer_salt_okunur_kisa_ve_json(tmp_path):
+    rev = AJANLAR["reviewer"]
+    # Salt-okunur: yazma/çalıştırma aracı yok
+    assert set(rev.araclar) == {"list_files", "read_file"}
+    assert "write_file" not in rev.araclar and "run_shell" not in rev.araclar
+    # Kısa: çıktı token sınırı var (2-4k)
+    assert rev.max_tokens is not None and 2000 <= rev.max_tokens <= 4000
+    # ajan_calistir max_tokens'ı mesaj_gonder'e geçirir; prompt JSON+kanıt ister
+    ork, istemci = orkestrator_kur(
+        tmp_path, [metin_cevap('{"approved": true, "issues": [], "evidence": []}')]
+    )
+    ork.ajan_calistir(rev, "incele")
+    assert istemci.istekler[0]["max_tokens"] == rev.max_tokens
+    sistem = istemci.istekler[0]["system"]
+    assert "approved" in sistem and "evidence" in sistem and "KANIT" in sistem.upper()
 
 
 def test_validator_mevcut_dosyayi_degistiremez(tmp_path):
@@ -211,6 +257,103 @@ def test_mutlu_yol_ajan_sirasi(tmp_path):
     assert "REVIEWER" in roller[4]
     assert state.ciktilar["dogrulama_gecti"] == "True"
     assert state.debug_turu == 0
+
+
+def test_codegen_arac_kullanip_yazmazsa_durtuyle_tekrar(tmp_path):
+    # Gözlenen hata: codegen list_files çağırıp hiç yazmadan metinle durdu → dürtü
+    senaryo = (
+        [metin_cevap("plan")]
+        + [tool_cevap("list_files", {}, "cg1"), metin_cevap("baktım, boş")]  # codegen 1: araç var, yazma yok
+        + [tool_cevap("write_file", {"path": "kod.py", "content": "x = 1"}, "cg2"), metin_cevap("yazdım")]  # dürtü sonrası
+        + validator_cevaplari(BASARI_ISARETI)
+        + [metin_cevap("rapor")]
+    )
+    ork, istemci = orkestrator_kur(tmp_path, senaryo)
+    state = ork.gorev_calistir("görev")
+
+    assert (ork.executor.workspace / "kod.py").is_file()
+    # FakeIstemci mesaj listesini referansla saklar; distinct çağrı = distinct liste kimliği.
+    # Nudge ile başlayan kaç AYRI codegen çağrısı olduğunu böyle sayarız.
+    durtulen_cagrilar = {
+        id(i["messages"])
+        for i in istemci.istekler
+        if isinstance(i["messages"][0]["content"], str)
+        and "HİÇ dosya yazmadın" in i["messages"][0]["content"]
+    }
+    assert len(durtulen_cagrilar) == 1  # tam bir kez dürtüldü
+    assert state.ciktilar["dogrulama_gecti"] == "True"
+
+
+def test_codegen_yazdiysa_durtu_yok(tmp_path):
+    # Codegen ilk denemede dosya yazdıysa dürtü tetiklenmemeli
+    senaryo = (
+        [metin_cevap("plan")]
+        + [tool_cevap("write_file", {"path": "kod.py", "content": "x = 1"}, "c1"), metin_cevap("yazdım")]
+        + validator_cevaplari(BASARI_ISARETI)
+        + [metin_cevap("rapor")]
+    )
+    ork, istemci = orkestrator_kur(tmp_path, senaryo)
+    state = ork.gorev_calistir("görev")
+
+    durtus = [
+        i for i in istemci.istekler
+        if isinstance(i["messages"][0]["content"], str)
+        and "HİÇ dosya yazmadın" in i["messages"][0]["content"]
+    ]
+    assert durtus == []
+    assert state.ciktilar["dogrulama_gecti"] == "True"
+
+
+def test_backend_codegen_yalniz_dosya_araclari(tmp_path):
+    # dogrulama_tipi="backend" → codegen'e run_shell/start_server/check_page VERİLMEZ
+    senaryo = [
+        tool_cevap("write_file", {"path": "backend.py", "content": "x = 1"}),
+        metin_cevap("yazdım"),
+    ]
+    ork, istemci = orkestrator_kur(tmp_path, senaryo)
+    ork._dogrulama_tipi = "backend"
+    ork.ajan_calistir(AJANLAR["codegen"], "backend yaz")
+
+    gonderilen = {t["name"] for t in istemci.istekler[0]["tools"]}
+    assert gonderilen == {"list_files", "search_files", "read_file", "write_file", "edit_file"}
+    assert "run_shell" not in gonderilen
+    assert "start_server" not in gonderilen
+    assert "check_page" not in gonderilen
+    assert "araçların YOK" in istemci.istekler[0]["system"]  # backend notu eklenmiş
+
+
+def test_backend_debugger_yalniz_dosya_araclari(tmp_path):
+    # Debugger da file-only: run_shell'i yok → pytest koşamaz → docker halüsinasyonu imkansız
+    senaryo = [
+        tool_cevap("edit_file", {"path": "kod.py", "eski_metin": "a", "yeni_metin": "b"}),
+        metin_cevap("düzelttim"),
+    ]
+    ork, istemci = orkestrator_kur(tmp_path, senaryo)
+    (ork.executor.workspace / "kod.py").write_text("a", encoding="utf-8")
+    ork._dogrulama_tipi = "fullstack"
+    ork.ajan_calistir(AJANLAR["debugger"], "düzelt")
+
+    gonderilen = {t["name"] for t in istemci.istekler[0]["tools"]}
+    assert gonderilen == {"list_files", "search_files", "read_file", "write_file", "edit_file"}
+    assert "run_shell" not in gonderilen
+    assert "yeniden üretmene gerek yok" in istemci.istekler[0]["system"] or \
+           "yeniden" in istemci.istekler[0]["system"]  # debugger notu eklendi
+
+
+def test_backend_disi_codegen_tam_arac_seti(tmp_path):
+    # frontend/None → codegen tam araç setini (check_page, start_server) korur
+    senaryo = [
+        tool_cevap("write_file", {"path": "index.html", "content": "<html></html>"}),
+        metin_cevap("yazdım"),
+    ]
+    ork, istemci = orkestrator_kur(tmp_path, senaryo)
+    ork._dogrulama_tipi = "frontend"
+    ork.ajan_calistir(AJANLAR["codegen"], "sayfa yap")
+
+    gonderilen = {t["name"] for t in istemci.istekler[0]["tools"]}
+    assert "check_page" in gonderilen
+    assert "start_server" in gonderilen
+    assert "run_shell" in gonderilen
 
 
 def test_basarisiz_dogrulama_debugger_tetikler(tmp_path):

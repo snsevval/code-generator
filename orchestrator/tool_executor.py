@@ -35,6 +35,16 @@ _ARKA_PLAN_BASLATICI = re.compile(
     re.IGNORECASE,
 )
 
+# Ortam/paket kurcalama yasak: model bir test kırılınca "docker sorunu" halüsinasyonuyla
+# host paketini kaldırmaya / pytest eklentisi kapatmaya / docker env kurcalamaya kalkıyor
+# (canlıda 35 tur debelendi — oysa pytest-docker kurulu bile değil). Sorun kodda, ortamda değil.
+_ORTAM_KURCALAMA = re.compile(
+    r"\bpip\s+(install|uninstall)\b|-p\s+no:|--disable-plugin\b|"
+    r"DOCKER_HOST|DOCKER_TLS_VERIFY|DOCKER_CERT_PATH|pytest-docker|"
+    r"net\s+start\s+com\.docker",
+    re.IGNORECASE,
+)
+
 # list_files'ın atladığı klasörler (üretilen/araç çıktısı içerikler)
 GIZLENEN_KLASORLER = {
     ".git",
@@ -246,6 +256,12 @@ class LocalShellRunner:
         self._workspace = workspace
 
     def calistir(self, komut: str, zaman_asimi: float) -> subprocess.CompletedProcess:
+        # pytest-docker gibi host eklentileri autoload olup pytest'i teste ulaşmadan
+        # ortam hatasına sokuyor; model bunu 'docker sorunu' sanıp deşeleniyordu
+        # (validator/debugger 35 tur). run_shell'deki pytest çağrıları da eklentisiz
+        # koşsun diye ortama bayrağı ekliyoruz (yalnız pytest okur, diğer komutlara etkisiz).
+        env = dict(os.environ)
+        env["PYTEST_DISABLE_PLUGIN_AUTOLOAD"] = "1"
         return subprocess.run(
             komut,
             shell=True,
@@ -254,6 +270,7 @@ class LocalShellRunner:
             text=True,
             errors="replace",
             timeout=zaman_asimi,
+            env=env,
         )
 
 
@@ -640,6 +657,14 @@ class ToolExecutor:
                 "sondaki &) desteklenmiyor — süreç asılı kalır. Sunucu başlatmak için "
                 "start_server aracını kullan; örnek girdi: "
                 '{"command": "uvicorn backend:app --port 8123", "port": 8123}',
+            )
+        if _ORTAM_KURCALAMA.search(command):
+            return ToolSonucu(
+                False,
+                "HATA: paket kurma/kaldırma (pip install/uninstall), pytest eklentisi "
+                "kapatma (-p no:) veya docker ortam değişkeni kurcalama desteklenmiyor. "
+                "Sorun çalışma ortamında DEĞİL, KODDA — hatanın assert satırını oku ve "
+                "kodu düzelt (testi/ortamı değil).",
             )
         zaman_asimi = timeout if timeout and timeout > 0 else VARSAYILAN_ZAMAN_ASIMI_SN
         try:

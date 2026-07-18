@@ -13,6 +13,7 @@ Next.js arayüzünün orkestratörle konuştuğu ince HTTP katmanı:
 from __future__ import annotations
 
 import os
+import sys
 import threading
 from pathlib import Path
 
@@ -25,6 +26,7 @@ from fastapi.responses import FileResponse, PlainTextResponse
 from pydantic import BaseModel
 
 from orchestrator.calisma_alani import gorev_klasoru_sec
+from orchestrator.fullstack_runner import fastapi_uygulamasi_bul
 from orchestrator.llm_client import VARSAYILAN_PROXY_URL
 from orchestrator.loop import Orkestrator
 from orchestrator.proje import ProjeOrkestratoru
@@ -91,6 +93,11 @@ class _Durum:
         # Canlı önizleme sunucusu (doğrulama sunucularından ayrı, tek aktif, açık kalır)
         self.onizleme_yoneticisi = None
         self.onizleme_url: str | None = None
+        # Önizleme backend'i: başarılı fullstack/backend görevden sonra {BACKEND_PORT}'te
+        # açık kalır ki /onizle/index.html'in fetch'i canlı backend'e ulaşsın (doğrulama
+        # sunucularından AYRI; Runner'ınki iş sonunda kapanır, bu kalır)
+        self.onizleme_backend_yoneticisi = None
+        self.onizleme_backend_url: str | None = None
 
 
 DURUM = _Durum()
@@ -142,6 +149,9 @@ def _gorev_kos(istek: GorevIstegi) -> None:
                 ),
             }
         else:
+            # "backend" tipinde doğrulama deterministik Runner'a gider (model
+            # validator devre dışı) — sahte-BASARILI ve validator debelenmesini önler
+            ork._dogrulama_tipi = playbook_adi
             state = ork.gorev_calistir(gorev_metni, devam=istek.devam)
             DURUM.sonuc = {
                 "proje": False,
@@ -150,6 +160,13 @@ def _gorev_kos(istek: GorevIstegi) -> None:
                 "reviewer": state.ciktilar.get("reviewer", ""),
                 "plan": state.ciktilar.get("planner", ""),
             }
+            # Başarılı fullstack/backend: backend'i önizleme için canlı bırak ki
+            # /onizle/index.html'in fetch'i (localhost:BACKEND_PORT) çalışsın
+            if DURUM.sonuc["dogrulama_gecti"] and playbook_adi in ("fullstack", "backend"):
+                _onizleme_backendini_baslat(ws)
+                if DURUM.onizleme_backend_url:
+                    log(f"[önizleme] backend canlı: {DURUM.onizleme_backend_url} — "
+                        "göz ikonuyla açınca liste/ekle/sil çalışır.")
     except Exception as e:  # UI'ye okunur hata taşınır
         DURUM.hata = f"{type(e).__name__}: {e}"
     finally:
@@ -191,6 +208,14 @@ def gorev_baslat(istek: GorevIstegi):
         DURUM.log = []
         DURUM.hata = None
         DURUM.sonuc = None
+        # Önceki görevin klasörü/dosyaları arayüzde kalmasın: yeni klasör _gorev_kos'ta
+        # belirlenene dek boş göster (eski projenin dosyaları sızmasın)
+        DURUM.klasor = None
+        DURUM.klasor_yolu = None
+    # Önceki önizlemeleri kapat: {BACKEND_PORT}'ü yeni görevin Runner'ına serbest
+    # bırak + eski canlı önizleme (Vite) sunucusunu durdur (port çakışması + sızıntı)
+    _onizlemeyi_durdur()
+    _onizleme_backendini_durdur()
     threading.Thread(target=_gorev_kos, args=(istek,), daemon=True).start()
     return {"baslatildi": True, "gorev": istek.gorev}
 
@@ -207,6 +232,7 @@ def durum():
         "kullanim": getattr(DURUM.istemci, "kullanim", None),
         "klasor": DURUM.klasor,
         "onizleme_url": DURUM.onizleme_url,
+        "onizleme_backend_url": DURUM.onizleme_backend_url,
     }
 
 
@@ -302,6 +328,7 @@ def onizle_baslat(istek: OnizlemeIstegi):
 @app.post("/api/onizle-durdur")
 def onizle_durdur():
     _onizlemeyi_durdur()
+    _onizleme_backendini_durdur()
     return {"durduruldu": True}
 
 
@@ -310,6 +337,40 @@ def _onizlemeyi_durdur() -> None:
         DURUM.onizleme_yoneticisi.hepsini_durdur()
         DURUM.onizleme_yoneticisi = None
         DURUM.onizleme_url = None
+
+
+def _onizleme_backendini_baslat(ws: Path) -> None:
+    """Görevin backend'ini {BACKEND_PORT}'te önizleme için canlı başlatır (varsa).
+
+    Doğrulama sunucularından AYRI ve açık kalır ki /onizle/index.html'in fetch'i
+    canlı backend'e ulaşsın. FastAPI modülü yoksa sessizce atlar (statik/vite görevi).
+    """
+    from orchestrator.sunucu import SunucuYoneticisi, bos_port_bul
+
+    _onizleme_backendini_durdur()  # tek aktif önizleme backend'i
+    uygulama = fastapi_uygulamasi_bul(ws)
+    if uygulama is None:
+        return
+    modul, app_degiskeni = uygulama
+    port = bos_port_bul()  # dinamik port — sabit port çakışması yok
+    komut = (
+        f'"{sys.executable}" -m uvicorn {modul}:{app_degiskeni} '
+        f"--port {port} --host 127.0.0.1"
+    )
+    yonetici = SunucuYoneticisi(ws)
+    mesaj = yonetici.baslat(komut, port)
+    if mesaj.startswith("HATA"):
+        return
+    DURUM.onizleme_backend_yoneticisi = yonetici
+    # Tek-origin: bu backend index.html'i de `/` kökünde servis eder → göz ikonu bunu açar
+    DURUM.onizleme_backend_url = f"http://localhost:{port}"
+
+
+def _onizleme_backendini_durdur() -> None:
+    if DURUM.onizleme_backend_yoneticisi is not None:
+        DURUM.onizleme_backend_yoneticisi.hepsini_durdur()
+        DURUM.onizleme_backend_yoneticisi = None
+        DURUM.onizleme_backend_url = None
 
 
 @app.get("/api/saglik")

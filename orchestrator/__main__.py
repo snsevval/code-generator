@@ -70,7 +70,9 @@ def main() -> int:
     print(f"Çalışma klasörü: {workspace}")
     runner = DockerShellRunner(workspace) if args.docker else None
     executor = ToolExecutor(workspace, shell_runner=runner)
-    orkestrator = Orkestrator(workspace, executor=executor)
+    # playbook_adi ("backend"/...) doğrulama tipini belirler: "backend" ise
+    # doğrulama deterministik Runner'a gider (model validator devre dışı)
+    orkestrator = Orkestrator(workspace, executor=executor, dogrulama_tipi=playbook_adi)
 
     def kullanim_ozeti() -> None:
         k = getattr(orkestrator.istemci, "kullanim", None)

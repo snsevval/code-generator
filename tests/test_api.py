@@ -298,3 +298,49 @@ def test_proje_modu_alt_gorevleri_doner(istemci, monkeypatch):
     assert veri["sonuc"]["dogrulama_gecti"] is False  # biri başarısız
     assert [a["durum"] for a in veri["sonuc"]["alt_gorevler"]] == ["basarili", "basarisiz"]
     assert "[decomposer] hedef alt görevlere bölünüyor..." in veri["log"]
+
+
+# --- Önizleme backend'i (başarılı fullstack/backend sonrası canlı kalır) ---
+
+
+class _SahteSunucuYoneticisi:
+    def __init__(self, ws):
+        self.durduruldu = False
+
+    def baslat(self, komut, port):
+        return f"Sunucu {port} portunda çalışıyor (PID 1)."
+
+    def hepsini_durdur(self):
+        self.durduruldu = True
+
+
+def test_onizleme_backendi_baslar_ve_durur(tmp_path, monkeypatch):
+    from orchestrator import sunucu
+
+    monkeypatch.setattr(sunucu, "SunucuYoneticisi", _SahteSunucuYoneticisi)
+    (tmp_path / "backend.py").write_text(
+        "from fastapi import FastAPI\napp = FastAPI()\n", encoding="utf-8"
+    )
+
+    api._onizleme_backendini_baslat(tmp_path)
+    # Dinamik port: URL http://localhost:<port> biçiminde olmalı (sabit port yok)
+    assert api.DURUM.onizleme_backend_url is not None
+    assert api.DURUM.onizleme_backend_url.startswith("http://localhost:")
+    assert int(api.DURUM.onizleme_backend_url.rsplit(":", 1)[1]) > 0
+    yonetici = api.DURUM.onizleme_backend_yoneticisi
+    assert yonetici is not None
+
+    api._onizleme_backendini_durdur()
+    assert api.DURUM.onizleme_backend_url is None
+    assert api.DURUM.onizleme_backend_yoneticisi is None
+    assert yonetici.durduruldu is True
+
+
+def test_onizleme_backendi_fastapi_yoksa_atlar(tmp_path, monkeypatch):
+    from orchestrator import sunucu
+
+    monkeypatch.setattr(sunucu, "SunucuYoneticisi", _SahteSunucuYoneticisi)
+    (tmp_path / "not.txt").write_text("x", encoding="utf-8")
+
+    api._onizleme_backendini_baslat(tmp_path)  # FastAPI yok → sessizce atlar
+    assert api.DURUM.onizleme_backend_url is None

@@ -18,50 +18,65 @@ import re
 BACKEND_PORT = 8123
 FRONTEND_PORT = 8200
 
-_ORTAK_KURALLAR = f"""
+# Her tarifte geçen evrensel kurallar (test izolasyonu + pytest disiplini).
+_ORTAK_KURALLAR = """
 [SİSTEM TARİFİ — bu akışa birebir uy]
+- Testler İZOLE olmalı: backend bellekte durum tutuyorsa (liste/sayaç), her testten
+  ÖNCE sıfırla. DOĞRU desen — MODÜL niteliğini değiştir (import backend; backend.X = ...):
+      import backend
+      @pytest.fixture(autouse=True)
+      def _sifirla():
+          backend.todos.clear()
+          backend.next_id = 1
+  YANLIŞ: `global next_id; next_id = 1` — bu import edilen adı yeniden bağlar,
+  backend.next_id'yi DEĞİŞTİRMEZ; durum sızar ve testler yanlış patlar (canlıda görüldü).
+- pytest başarısız olursa PANİKLEME: assert satırını OKU ve KODU düzelt. Ortam değişkeni,
+  paket veya eklenti KURCALAMA — sorun kodda, çalıştırma ortamında değil.
+"""
+
+# Yalnız ARAÇ kullanan (sunucuyu KENDİ başlatan) tarifler için — vite/frontend.
+# backend/fullstack file-only olduğundan (sunucuyu sistem başlatır) bu kurallar
+# onlara EKLENMEZ; aksi halde model olmayan araçları çağırmaya çalışır.
+_SUNUCU_KURALLARI = f"""
 - Portlar sabittir: backend {BACKEND_PORT}, frontend {FRONTEND_PORT}. Başka port deneme.
 - Sunucu başlatma YALNIZCA start_server ile (run_shell'de start /b, & vb. YASAK).
   start_server çağrısı iki alan ister; örnek: {{"command": "uvicorn backend:app --port {BACKEND_PORT}", "port": {BACKEND_PORT}}}
 - Bir sunucuyu başlat-durdur döngüsüne sokma: bir kez başlat, tüm doğrulamayı yap, en sonda durdur.
 - İş bitince açtığın HER sunucuyu stop_server ile durdur.
-- Testler İZOLE olmalı: backend'de bellekte durum tutuluyorsa (global sayaç vb.),
-  her test kendi başlangıç durumunu kurmalı (örn. önce /sifirla çağır ya da
-  fixture ile sıfırla). Aksi halde testler sırayla koşunca birikir ve YANLIŞ
-  başarısızlık verir (canlıda beklenen 5 yerine 6 gelip çöktü).
-- pytest tek bir testte başarısız olursa PANİKLEME: hatayı OKU (assert satırı),
-  nedeni düzelt. '-p no:docker', 'pip uninstall', ortam değişkeni denemesi YAPMA.
 """
 
 _PLAYBOOKLAR: dict[str, str] = {
     "fullstack": _ORTAK_KURALLAR
-    + f"""
-Full-stack akışı — sırasıyla:
-1. backend.py: FastAPI + CORSMiddleware (allow_origins=["*"], allow_methods=["*"],
-   allow_headers=["*"]). Uçlar isteğe göre; cevaplar JSON. Veri bellekte (global değişken).
-2. test_backend.py: pytest + fastapi.testclient.TestClient ile TÜM uçları test et;
-   run_shell 'python -m pytest test_backend.py -v' ile koş. (Sunucu başlatmadan çalışır.)
-3. index.html: tek dosya, CSS gömülü; fetch ile http://localhost:{BACKEND_PORT} uçlarına
-   bağlanır. Sayfa yüklenince veriyi çekip gösterir; butonlar POST atıp görünümü günceller.
-4. CANLI DOĞRULAMA (tek turda, başlat-durdur zikzakı YOK):
-   a. start_server {{"command": "uvicorn backend:app --port {BACKEND_PORT}", "port": {BACKEND_PORT}}}
-   b. start_server {{"command": "python -m http.server {FRONTEND_PORT}", "port": {FRONTEND_PORT}}}
-   c. run_shell curl ile uçları dene (örn. POST sonrası GET değişimi doğrula)
-   d. check_page http://localhost:{FRONTEND_PORT}/index.html — konsol hatasız olmalı,
-      sayfada backend'den gelen veri görünmeli
-   e. stop_server {FRONTEND_PORT}, stop_server {BACKEND_PORT}
+    + """
+Full-stack (TEK-ORIGIN) — ŞU DOSYALARI YAZ (sistem çalıştırıp doğrular; sen pytest/sunucu/tarayıcı ÇALIŞTIRMA):
+1. backend.py: FastAPI; uçlar JSON, veri bellekte. AYRICA index.html'i `/` kökünde SERVİS ET:
+       from fastapi.responses import FileResponse
+       @app.get("/")
+       def index():
+           return FileResponse("index.html")
+   Frontend ve API aynı origin'de olacağı için CORS ve sabit port GEREKMEZ.
+2. test_backend.py: pytest + fastapi.testclient.TestClient ile TÜM uçları test et.
+   Testler İZOLE: autouse fixture ile her testten önce 'import backend; backend.<liste>.clear();
+   backend.<sayaç> = ...' ile sıfırla.
+3. index.html: tek dosya, CSS gömülü. fetch'te GÖRELİ yol kullan — fetch('/todos') (sabit
+   host/port YAZMA, http://localhost:XXXX YOK). Sayfa yüklenince GET ile listeyi çek ve DOM'a
+   BAS; ekle POST, sil DELETE. Frontend backend'in özelliğini YANSITMALI (sayaç değil, backend neyse o).
+ZORUNLU: Sistem backend'i BOŞ bir portta başlatır (index.html'i de o servis eder), sayfayı açıp
+frontend'in backend'e GERÇEKTEN fetch atıp veri çektiğini AĞ düzeyinde kontrol eder — backend'e
+istek atmayan bağımsız/sahte sayfa GEÇMEZ. Sen sadece 3 dosyayı yaz.
 """,
     "backend": _ORTAK_KURALLAR
-    + f"""
-Backend akışı — sırasıyla:
-1. backend.py: FastAPI; uçlar isteğe göre, cevaplar JSON, veri bellekte.
-   Frontend'den erişilecekse CORSMiddleware ekle (allow_origins=["*"]).
-2. test_backend.py: pytest + TestClient ile tüm uçları test et;
-   run_shell 'python -m pytest test_backend.py -v' ile koş.
-3. CANLI DOĞRULAMA: start_server {{"command": "uvicorn backend:app --port {BACKEND_PORT}", "port": {BACKEND_PORT}}},
-   run_shell curl ile uçları dene, stop_server {BACKEND_PORT}.
+    + """
+Backend — ŞU DOSYALARI YAZ (sistem çalıştırıp doğrular; sen pytest/sunucu ÇALIŞTIRMA):
+1. backend.py: FastAPI; uçlar JSON, veri bellekte. Frontend erişecekse CORSMiddleware ekle
+   (allow_origins=["*"]).
+2. test_backend.py: pytest + TestClient ile TÜM uçları test et. Testler İZOLE: autouse fixture
+   ile her testten önce 'import backend; backend.<liste>.clear(); backend.<sayaç> = ...' ile sıfırla.
+Sistem: pytest'i izole (PYTEST_DISABLE_PLUGIN_AUTOLOAD) koşar ve uvicorn'u başlatıp uçları
+doğrular. Sen sadece 2 dosyayı yaz, kısa özetle bitir.
 """,
     "vite": _ORTAK_KURALLAR
+    + _SUNUCU_KURALLARI
     + f"""
 Vite/React proje akışı — sırasıyla:
 1. Dosyaları yaz: package.json (dev script: "vite"), vite.config.js
@@ -74,6 +89,7 @@ Vite/React proje akışı — sırasıyla:
    modüller yüklenmez), stop_server {FRONTEND_PORT}.
 """,
     "frontend": _ORTAK_KURALLAR
+    + _SUNUCU_KURALLARI
     + f"""
 Statik sayfa akışı — sırasıyla:
 1. index.html: tek dosya, CSS/JS gömülü (harici derleme yok). React istenirse

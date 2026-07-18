@@ -32,6 +32,7 @@ type Durum = {
   kullanim: Kullanim | null;
   klasor: string | null;
   onizleme_url: string | null;
+  onizleme_backend_url: string | null;
 };
 
 type Saglik = { api: boolean; proxy: boolean };
@@ -83,6 +84,148 @@ function tokenBicimle(n: number): string {
   if (n >= 1000) return `${(n / 1000).toFixed(1)}K`;
   return String(n);
 }
+
+
+// Yalnızca renkleri değiştirir; yerleşim ve davranışlara dokunmaz.
+const YUMUSAK_MOR_TEMA = `
+  .${styles.kabuk} {
+    background: #1f2024 !important;
+    color: #f0eef5 !important;
+    --mor: #a78bfa;
+    --mor-acik: #c4b5fd;
+    --indigo: #8f9cf4;
+    --basari: #8fc9a8;
+    --tehlike: #e3a0ad;
+    --kenar-belirgin: #555762;
+  }
+
+  .${styles.marka} h1 {
+    color: #b79cff !important;
+  }
+
+  .${styles.marka} p,
+  .${styles.karakterSayaci},
+  .${styles.akisDurum},
+  .${styles.altGorevEtiket},
+  .${styles.dosyaBoyut},
+  .${styles.kaynakIkincil},
+  .${styles.ozet} dt {
+    color: #aaa7b2 !important;
+  }
+
+  .${styles.kart},
+  .${styles.onayPaneli},
+  .${styles.bilgi} {
+    background: #292a30 !important;
+    border-color: #3d3f48 !important;
+  }
+
+  .${styles.kart} h2,
+  .${styles.akisAd},
+  .${styles.altGorevMetin},
+  .${styles.ozet} dd,
+  .${styles.kaynakListe},
+  .${styles.dosyaLink} {
+    color: #eceaf1 !important;
+  }
+
+  .${styles.kart} textarea,
+  .${styles.kart} select,
+  .${styles.log},
+  .${styles.kart} details,
+  .${styles.dosyaListe} li,
+  .${styles.altGorev} {
+    background: #24252a !important;
+    border-color: #3f414a !important;
+    color: #eceaf1 !important;
+  }
+
+  .${styles.kart} textarea::placeholder {
+    color: #85828d !important;
+  }
+
+  .${styles.kart} textarea:focus,
+  .${styles.kart} select:focus {
+    border-color: #9d83e8 !important;
+    outline-color: #9d83e8 !important;
+  }
+
+  .${styles.kart} button,
+  .${styles.onayButonlari} button,
+  .${styles.onizleBaslat} {
+    background: #9075d8 !important;
+    border-color: #a98ee8 !important;
+    color: #ffffff !important;
+  }
+
+  .${styles.kart} button:hover,
+  .${styles.onayButonlari} button:hover,
+  .${styles.onizleBaslat}:hover {
+    background: #9e84e2 !important;
+  }
+
+  .${styles.anahtar},
+  .${styles.rozet},
+  .${styles.durumEtiketi},
+  .${styles.canliEtiket},
+  .${styles.indirDugmesi},
+  .${styles.onizleDurdur} {
+    background: #303139 !important;
+    border-color: #494b55 !important;
+    color: #c9c6d0 !important;
+  }
+
+  .${styles.anahtarAcik},
+  .${styles.durumAktif},
+  .${styles.canliEtiket} {
+    background: #3a334d !important;
+    border-color: #735fa4 !important;
+    color: #cbbcf2 !important;
+  }
+
+  .${styles.rozetIyi},
+  .${styles.durumIyi},
+  .${styles.gecti},
+  .${styles.onizleAcik} {
+    color: #9bd3b4 !important;
+  }
+
+  .${styles.rozetKotu},
+  .${styles.durumKotu},
+  .${styles.kaldi},
+  .${styles.hata},
+  .${styles.durdurButonu} {
+    color: #e5a3af !important;
+  }
+
+  .${styles.durdurButonu} {
+    background: #493238 !important;
+    border-color: #744951 !important;
+  }
+
+  .${styles.akisAdimi} {
+    border-color: #3f414a !important;
+  }
+
+  .${styles.akisNumara} {
+    background: #303139 !important;
+    border-color: #4a4c56 !important;
+    color: #bbb7c5 !important;
+  }
+
+  .${styles.halkaIc} {
+    background: #292a30 !important;
+  }
+
+  .${styles.planner} { color: #9fbfe0 !important; }
+  .${styles.codegen} { color: #c5a7eb !important; }
+  .${styles.validator} { color: #9fcbb6 !important; }
+  .${styles.debuggerAjan} { color: #dfb08f !important; }
+  .${styles.reviewer} { color: #b9acd9 !important; }
+  .${styles.proje} { color: #aab7d7 !important; }
+  .${styles.orkestrator} { color: #d1a9c1 !important; }
+  .${styles.imlec} { color: #b79cff !important; }
+`;
 
 // --- SVG simgeler (tek çizgi ailesi, 16px) ---
 
@@ -239,6 +382,8 @@ export default function Anasayfa() {
   async function gorevBaslat(e: React.FormEvent) {
     e.preventDefault();
     setGonderimHatasi(null);
+    setDosyalar([]); // eski projenin dosyaları anında temizlensin (poll'u bekleme)
+    setOnizlemeHatasi(null);
     try {
       const y = await fetch(`${API}/api/gorev`, {
         method: "POST",
@@ -289,13 +434,12 @@ export default function Anasayfa() {
 
   return (
     <div className={styles.kabuk}>
+      <style>{YUMUSAK_MOR_TEMA}</style>
       <header className={styles.baslik}>
         <div className={styles.marka}>
-          <span className={styles.markaLogo} aria-hidden>
-            {"</>"}
-          </span>
+          
           <div>
-            <h1>Kod Üretim Orkestratörü</h1>
+            
             <p>Doğal dille görev tanımla, ajan döngüsünü canlı izle</p>
           </div>
         </div>
@@ -629,10 +773,18 @@ export default function Anasayfa() {
                       {/\.html?$/i.test(d.ad) && (
                         <a
                           className={styles.indirDugmesi}
-                          href={`${API}/onizle/${d.ad.split("/").map(encodeURIComponent).join("/")}`}
+                          href={
+                            durum?.onizleme_backend_url && /(^|\/)index\.html?$/i.test(d.ad)
+                              ? durum.onizleme_backend_url
+                              : `${API}/onizle/${d.ad.split("/").map(encodeURIComponent).join("/")}`
+                          }
                           target="_blank"
                           rel="noopener noreferrer"
-                          title={`${d.ad} sayfasını canlı önizle`}
+                          title={
+                            durum?.onizleme_backend_url && /(^|\/)index\.html?$/i.test(d.ad)
+                              ? `${d.ad} — canlı backend'e bağlı önizleme`
+                              : `${d.ad} sayfasını canlı önizle`
+                          }
                           aria-label={`${d.ad} sayfasını önizle`}
                         >
                           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden>

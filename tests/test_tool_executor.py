@@ -250,6 +250,31 @@ def test_shell_ve_zinciri_serbest(executor):
     assert sonuc.ok, sonuc.cikti
 
 
+@pytest.mark.parametrize(
+    "komut",
+    [
+        "pip uninstall -y pytest-docker",
+        "pip install fastapi uvicorn",
+        "python -m pytest test_x.py -p no:docker",
+        "pytest --disable-plugin docker",
+        "set DOCKER_HOST= && pytest test_x.py",
+        "net start com.docker.service",
+    ],
+)
+def test_shell_ortam_kurcalama_reddedilir(executor, komut):
+    # Model 'docker sorunu' halüsinasyonuyla ortamı kurcalamaya kalkıyor (canlıda 35 tur);
+    # paket/eklenti/docker-env komutları mekanik reddedilir, kod düzeltmeye yönlendirilir
+    sonuc = executor.run_shell(komut)
+    assert not sonuc.ok
+    assert "KODDA" in sonuc.cikti
+
+
+def test_shell_pytest_normal_calisir(executor):
+    # Guard normal pytest'i engellememeli (yalnız kurcalama kalıplarını)
+    sonuc = executor.run_shell(f'{PYTHON} -c "print(\'pytest -q gibi\')"')
+    assert sonuc.ok
+
+
 def test_start_server_port_eksik_ornekli_hata(executor):
     sonuc = executor.calistir("start_server", {"command": "uvicorn backend:app --port 8123"})
     assert not sonuc.ok

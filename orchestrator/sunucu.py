@@ -48,6 +48,18 @@ def port_dinliyor_mu(port: int, host: str | None = None) -> bool:
     return False
 
 
+def bos_port_bul() -> int:
+    """OS'tan boş bir TCP portu ister (127.0.0.1'e 0 portuyla bağlanıp okur).
+
+    Deterministik Runner'ın sunucuları için: portu MODEL değil orkestratör seçer,
+    böylece port çakışması/dansı olmaz. Bağlama ile gerçek kullanım arasında küçük
+    bir TOCTOU penceresi var ama yerel tek-görev akışında ihmal edilebilir.
+    """
+    with contextlib.closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as s:
+        s.bind(("127.0.0.1", 0))
+        return int(s.getsockname()[1])
+
+
 @dataclass
 class Sunucu:
     port: int

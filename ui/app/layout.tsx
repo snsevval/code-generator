@@ -14,7 +14,7 @@ const firaCode = Fira_Code({
 });
 
 export const metadata: Metadata = {
-  title: "Kod Üretim Orkestratörü",
+  title: "CodeG",
   description: "Agentic kod üretim döngüsünü izleme arayüzü",
 };
 

@@ -21,6 +21,7 @@ from orchestrator.agents import (
     BASARISIZLIK_ISARETI,
     AjanTanimi,
 )
+from orchestrator.fullstack_runner import FullstackRunner
 from orchestrator.git_deposu import GitDeposu
 from orchestrator.llm_client import LLMIstemcisi
 from orchestrator.state import OturumState
@@ -45,6 +46,33 @@ _YIKICI_KABUK = re.compile(
 # Aynı araç + aynı girdi bu kadar kez tekrarlanırsa çalıştırılmaz (döngü kırıcı);
 # araya write_file girince sayaç sıfırlanır (düzelt-doğrula döngüsü meşrudur)
 MAX_AYNI_CAGRI = 2
+
+# Backend görevlerinde Codegen'e verilen araçlar: YALNIZCA dosya işlemleri.
+# Doğrulamayı (pytest/uvicorn) deterministik Runner yaptığı için run_shell/
+# start_server/check_page gereksiz — ve zayıf modelde yalnızca deşelenme zemini
+# (canlıda codegen bu araçlarla kabuk/docker/sunucu deşeleyip 230k token yaktı).
+# UI/frontend/fullstack'te Codegen tam araç setini korur (görsel geri-besleme gerekli).
+_YALNIZ_DOSYA_ARACLARI = frozenset(
+    {"list_files", "search_files", "read_file", "write_file", "edit_file"}
+)
+_CODEGEN_BACKEND_NOTU = (
+    "\n\nÖNEMLİ (bu görev): YALNIZCA dosyaları yaz — backend.py, test_backend.py ve "
+    "full-stack ise index.html (gerekirse yardımcı modüller). Testleri, sunucuyu veya "
+    "tarayıcıyı SEN çalıştırma; sistem pytest'i izole koşar, backend'i başlatır ve "
+    "frontend'in backend'e bağlandığını deterministik doğrular. Kabuk komutu, sunucu "
+    "başlatma veya sayfa açma araçların YOK. Testleri baştan İZOLE yaz (her testten önce "
+    "durumu sıfırlayan autouse fixture). Full-stack'te TEK-ORIGIN: backend index.html'i `/` "
+    "kökünde servis etsin (FileResponse('index.html')) ve index.html fetch'te GÖRELİ yol "
+    "kullansın (fetch('/todos')) — aynı origin, sabit port/CORS gerekmez. Kısa özetle bitir."
+)
+_DEBUGGER_BACKEND_NOTU = (
+    "\n\nÖNEMLİ (bu görev): Sana Runner'ın DETERMİNİSTİK hata mesajı verildi — kesin, hatayı "
+    "'yeniden üretmene' gerek yok. Test/sunucu/tarayıcı ÇALIŞTIRMA (araçların yok). İlgili "
+    "dosyayı read_file ile aç, KÖK NEDENİ edit_file ile düzelt ve DUR — sistem yeniden "
+    "doğrular. Ortam/paket/eklenti kurcalama YOK; testi/assert'i GEVŞETME — asıl KODU düzelt. "
+    "Örn. 'frontend backend'e istek atmadı' ise index.html'deki fetch yolunu düzelt "
+    "(göreli '/todos') veya backend index.html'i `/` kökünde servis etmiyorsa ekle."
+)
 
 # Şema uyarısı için: araç adı → geçerli parametre adları
 _ARAC_PARAMETRELERI = {
@@ -94,11 +122,16 @@ class Orkestrator:
         state_yolu: Path | str = ".state/oturum.json",
         log: bool | object = True,
         git: GitDeposu | None | bool = True,
+        dogrulama_tipi: str | None = None,
     ):
         self.executor = executor or ToolExecutor(workspace)
         self.istemci = istemci or LLMIstemcisi()
         self.state_yolu = Path(state_yolu)
         self._log = log
+        # Playbook tipi ("backend"/"fullstack"/...): "backend" ise doğrulama model
+        # validator yerine deterministik FullstackRunner ile yapılır (istikrarsızlık
+        # + sahte-BASARILI'yı öldürür). None ise klasik model-doğrulama akışı.
+        self._dogrulama_tipi = dogrulama_tipi
         # Son ajan_calistir çağrısında gerçekten yürütülen araç sayısı
         # (kanıt şartı: doğrulama kararları araçsız kabul edilmez)
         self.son_arac_sayisi = 0
@@ -120,9 +153,19 @@ class Orkestrator:
 
     def ajan_calistir(self, ajan: AjanTanimi, gorev_metni: str) -> str:
         """Ajanı, tool çağrıları çözülene dek çalıştırır; nihai metnini döndürür."""
-        araclar = [t for t in TOOL_TANIMLARI if t["name"] in ajan.araclar]
+        # Backend görevinde Codegen yalnızca dosya yazar (doğrulamayı Runner devraldı);
+        # diğer tüm durumlarda ajan tam araç setini kullanır.
+        araclar_adlari = ajan.araclar
+        sistem = ajan.sistem_prompt
+        if self._dogrulama_tipi in ("backend", "fullstack") and ajan.ad in ("codegen", "debugger"):
+            araclar_adlari = tuple(a for a in araclar_adlari if a in _YALNIZ_DOSYA_ARACLARI)
+            sistem = sistem + (
+                _CODEGEN_BACKEND_NOTU if ajan.ad == "codegen" else _DEBUGGER_BACKEND_NOTU
+            )
+        araclar = [t for t in TOOL_TANIMLARI if t["name"] in araclar_adlari]
         mesajlar: list[dict] = [{"role": "user", "content": gorev_metni}]
         self.son_arac_sayisi = 0
+        self.son_yazma_sayisi = 0  # bu ajan koşusunda başarılı write_file/edit_file sayısı
         tekrar_sayaci: dict[tuple, int] = {}
         pespese_kabuk = 0  # dosya yazmadan art arda run_shell (debelenme sinyali)
 
@@ -130,9 +173,10 @@ class Orkestrator:
             _gecmisi_kirp(mesajlar)
             yanit = self.istemci.mesaj_gonder(
                 model=ajan.model,
-                system=ajan.sistem_prompt,
+                system=sistem,
                 tools=araclar or None,
                 messages=mesajlar,
+                max_tokens=ajan.max_tokens,
             )
             tool_bloklari = [
                 b for b in yanit.get("content", []) if b.get("type") == "tool_use"
@@ -147,6 +191,14 @@ class Orkestrator:
             for blok in tool_bloklari:
                 self._yaz(f"    [{ajan.ad}] araç: {blok['name']}({blok.get('input', {})})")
                 girdi = blok.get("input") or {}
+                # Bazı sağlayıcılar tool_use.input'u JSON string döndürüyor (ör. kimi
+                # NIM/OpenRouter kod modelleri); orkestratör dict bekler → normalize et,
+                # yoksa aşağıdaki girdi.get(...) çağrıları AttributeError verir.
+                if isinstance(girdi, str):
+                    try:
+                        girdi = json.loads(girdi)
+                    except json.JSONDecodeError:
+                        girdi = {}
                 anahtar = (
                     blok["name"],
                     json.dumps(girdi, sort_keys=True, ensure_ascii=False, default=str),
@@ -194,6 +246,7 @@ class Orkestrator:
                         # (düzelt → yeniden test et döngüsü)
                         tekrar_sayaci.clear()
                         pespese_kabuk = 0
+                        self.son_yazma_sayisi += 1
                     elif blok["name"] == "run_shell" or (
                         blok["name"] == "start_server" and not sonuc.ok
                     ):
@@ -328,6 +381,60 @@ class Orkestrator:
             )
             return self._dogrulama_gecti(netlestirme)
 
+    def _codegen_kos(self, state: OturumState, gorev: str, plan: str) -> None:
+        """Codegen'i çalıştırır; hiç dosya yazmadıysa bir kez güçlü dürtüyle tekrarlar.
+
+        Canlıda Nemotron ilk keşif turundan sonra kısa metin dönüp hiç write_file
+        yapmadan durabiliyor (0 dosya üretti — 3 koşuda gözlendi). Sessizce ilerlemek,
+        boş debug turları demek; bunun yerine 'planı UYGULA, dosyaları YAZ' diye bir
+        kez daha ister. (Devam modunda önceden tamamlanmış codegen'e dokunmaz.)
+        """
+        onceden_tamam = "codegen" in state.tamamlanan
+        self._asama(state, "codegen", f"Görev: {gorev}\n\nUygulanacak plan:\n{plan}")
+        # Dürtü koşulu: codegen ARAÇ kullandı ama hiç dosya YAZMADI (gözlenen hata:
+        # list_files çağırıp kısa metinle durdu). Hiç araç kullanmayan saf-metin
+        # durumu zaten deterministik Runner'da yakalanır — burada dürtmüyoruz.
+        if onceden_tamam or self.son_yazma_sayisi > 0 or self.son_arac_sayisi == 0:
+            return
+        self._yaz("[orkestratör] codegen hiç dosya yazmadı → dürtüyle tekrar isteniyor")
+        state.tamamlanan.remove("codegen")
+        self._asama(
+            state,
+            "codegen",
+            f"Görev: {gorev}\n\nUygulanacak plan:\n{plan}\n\n"
+            "ÖNEMLİ: Önceki denemende HİÇ dosya yazmadın — bu kabul edilemez. Planı "
+            "AÇIKLAMA, UYGULA: write_file aracıyla gereken kod ve test dosyalarını "
+            "(örn. backend.py, test_backend.py) ŞİMDİ oluştur. Metin yazma, dosya yaz.",
+        )
+
+    def _deterministik_dogrula(self) -> tuple[bool, str]:
+        """Backend/full-stack tipinde doğrulamayı Runner ile deterministik yapar.
+
+        Model hiç karışmaz. Backend: pytest (izole) + uvicorn + /openapi.json.
+        Full-stack: ayrıca frontend'i açıp backend'e fetch bağlantısını AĞ düzeyinde
+        kanıtlar. Sonuç ve gerekçe metni (debugger'a verilecek) döndürülür.
+        """
+        runner = FullstackRunner(self.executor.workspace, log=self._yaz)
+        if self._dogrulama_tipi == "fullstack":
+            rapor = runner.fullstack_dogrula()
+        else:
+            rapor = runner.backend_dogrula()
+        self._yaz(f"[runner] doğrulama: {'BAŞARILI' if rapor.gecti else 'BAŞARISIZ'}")
+        return rapor.gecti, rapor.detay
+
+    def _dogrula(self, state: OturumState, gorev: str, plan: str) -> tuple[bool, str]:
+        """Doğrulamayı tipine göre yürütür; (geçti_mi, gerekçe_metni) döndürür.
+
+        'backend'/'fullstack' tipinde deterministik Runner; aksi halde klasik
+        model-doğrulama (kanıt şartı + işaret netleştirme).
+        """
+        if self._dogrulama_tipi in ("backend", "fullstack"):
+            return self._deterministik_dogrula()
+        dogrulama = self._kanitli_dogrulama(
+            state, f"Görev: {gorev}\n\nPlan:\n{plan}\n\nÜretilen işi doğrula."
+        )
+        return self.dogrulamayi_coz(dogrulama), dogrulama
+
     # --- Ana akış ---
 
     def gorev_calistir(self, gorev: str, devam: bool = False) -> OturumState:
@@ -348,15 +455,10 @@ class Orkestrator:
             state = OturumState(gorev=gorev)
 
         plan = self._asama(state, "planner", f"Görev: {gorev}\n\nBu görev için plan yap.")
-        self._asama(
-            state, "codegen", f"Görev: {gorev}\n\nUygulanacak plan:\n{plan}"
-        )
-        dogrulama = self._kanitli_dogrulama(
-            state, f"Görev: {gorev}\n\nPlan:\n{plan}\n\nÜretilen işi doğrula."
-        )
+        self._codegen_kos(state, gorev, plan)
+        gecti, dogrulama = self._dogrula(state, gorev, plan)
 
-        # Başarısızsa debugger ↔ validator döngüsü
-        gecti = self.dogrulamayi_coz(dogrulama)
+        # Başarısızsa debugger ↔ doğrulama döngüsü (doğrulama: model ya da Runner)
         while not gecti:
             if state.debug_turu >= MAX_DEBUG_TURU:
                 self._yaz(f"[orkestratör] {MAX_DEBUG_TURU} debug turu tükendi, bırakılıyor.")
@@ -369,14 +471,11 @@ class Orkestrator:
                 "Sorunu bul ve düzelt.",
             )
             state.ciktilar[f"debugger_{state.debug_turu}"] = debug_cikti
-            # Doğrulamayı yeniden koş (önceki sonucu geçersiz kıl)
+            # Doğrulamayı yeniden koş (önceki model-validator sonucunu geçersiz kıl;
+            # Runner yolunda 'validator' zaten tamamlanan'da olmaz — no-op)
             if "validator" in state.tamamlanan:
                 state.tamamlanan.remove("validator")
-            dogrulama = self._kanitli_dogrulama(
-                state,
-                f"Görev: {gorev}\n\nPlan:\n{plan}\n\nDüzeltme sonrası işi yeniden doğrula.",
-            )
-            gecti = self.dogrulamayi_coz(dogrulama)
+            gecti, dogrulama = self._dogrula(state, gorev, plan)
 
         state.ciktilar["dogrulama_gecti"] = str(gecti)
         self._asama(
