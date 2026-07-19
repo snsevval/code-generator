@@ -10,6 +10,7 @@ backend bağlantısı ağ düzeyinde doğrulanır.
 
 Ayrıntılı dokümantasyon: [docs/PROJE_RAPORU.md](docs/PROJE_RAPORU.md) ·
 [docs/DURUM.md](docs/DURUM.md) · [docs/task_plan.md](docs/task_plan.md)
+🌐 Canlı: https://snsevval.github.io/code-generator-doc/
 
 ## Özellikler
 
