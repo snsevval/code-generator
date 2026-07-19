@@ -33,6 +33,7 @@ type Durum = {
   klasor: string | null;
   onizleme_url: string | null;
   onizleme_backend_url: string | null;
+  sohbet: { istek: string; basarili: boolean }[];
 };
 
 type Saglik = { api: boolean; proxy: boolean };
@@ -379,29 +380,48 @@ export default function Anasayfa() {
     await durumuGetir();
   }
 
+  // Takip modu: mevcut proje üzerinde yeni istek ("rengi değiştir", "buton ekle"…)
+  const [takipIstek, setTakipIstek] = useState("");
+
+  async function istekGonder(metin: string, takip: boolean) {
+    setGonderimHatasi(null);
+    setOnizlemeHatasi(null);
+    if (!takip) setDosyalar([]); // yeni proje: eski dosyalar anında temizlensin
+    const y = await fetch(`${API}/api/gorev`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        gorev: metin,
+        model: model || null,
+        docker,
+        proje: takip ? false : proje,
+        onayli: !takip && proje && onayli,
+        tasarim: takip ? false : tasarim,
+        takip,
+      }),
+    });
+    if (!y.ok) {
+      const veri = await y.json().catch(() => null);
+      throw new Error(veri?.detail ?? `HTTP ${y.status}`);
+    }
+    await durumuGetir();
+  }
+
   async function gorevBaslat(e: React.FormEvent) {
     e.preventDefault();
-    setGonderimHatasi(null);
-    setDosyalar([]); // eski projenin dosyaları anında temizlensin (poll'u bekleme)
-    setOnizlemeHatasi(null);
     try {
-      const y = await fetch(`${API}/api/gorev`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          gorev,
-          model: model || null,
-          docker,
-          proje,
-          onayli: proje && onayli,
-          tasarim,
-        }),
-      });
-      if (!y.ok) {
-        const veri = await y.json().catch(() => null);
-        throw new Error(veri?.detail ?? `HTTP ${y.status}`);
-      }
-      await durumuGetir();
+      await istekGonder(gorev, false);
+    } catch (err) {
+      setGonderimHatasi(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  async function takipGonder(e: React.FormEvent) {
+    e.preventDefault();
+    if (!takipIstek.trim()) return;
+    try {
+      await istekGonder(takipIstek, true);
+      setTakipIstek("");
     } catch (err) {
       setGonderimHatasi(err instanceof Error ? err.message : String(err));
     }
@@ -597,6 +617,41 @@ export default function Anasayfa() {
                 <p className={styles.hata} role="alert">
                   Görev hatası: {durum.hata}
                 </p>
+              )}
+
+              {/* Takip: görev bitince aynı proje üzerinde yeni istek ver */}
+              {!durum.calisiyor && durum.klasor && (durum.sonuc || durum.hata) && (
+                <section className={styles.kart}>
+                  <div className={styles.kartBaslik}>
+                    <h2>Projeye devam et</h2>
+                    <span className={styles.karakterSayaci}>{durum.klasor}</span>
+                  </div>
+                  {(durum.sohbet?.length ?? 0) > 0 && (
+                    <ol style={{ margin: "0 0 10px", paddingLeft: 18, fontSize: 13, opacity: 0.85 }}>
+                      {durum.sohbet.map((s, i) => (
+                        <li key={i} style={{ marginBottom: 2 }}>
+                          {s.basarili ? "✅" : "⚠️"} {s.istek.length > 90 ? s.istek.slice(0, 90) + "…" : s.istek}
+                        </li>
+                      ))}
+                    </ol>
+                  )}
+                  <form onSubmit={takipGonder} style={{ display: "flex", gap: 8 }}>
+                    <input
+                      type="text"
+                      value={takipIstek}
+                      onChange={(e) => setTakipIstek(e.target.value)}
+                      placeholder="Değişiklik iste… (örn. arka planı koyu yap, listeye animasyon ekle)"
+                      style={{ flex: 1 }}
+                    />
+                    <button type="submit" disabled={!takipIstek.trim()}>
+                      ↻ Uygula
+                    </button>
+                  </form>
+                  <p style={{ margin: "8px 0 0", fontSize: 12, opacity: 0.7 }}>
+                    Mevcut dosyalar korunur; yalnızca istenen değişiklik uygulanır ve proje yeniden
+                    doğrulanır. Yeni bir projeye başlamak için üstteki formu kullan.
+                  </p>
+                </section>
               )}
 
               {durum.sonuc && (durum.sonuc.plan || durum.sonuc.reviewer) && (

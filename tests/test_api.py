@@ -336,6 +336,129 @@ def test_onizleme_backendi_baslar_ve_durur(tmp_path, monkeypatch):
     assert yonetici.durduruldu is True
 
 
+def test_takip_ayni_klasorde_baglamla_calisir(istemci, monkeypatch, tmp_path):
+    """Takip: aynı klasör + bağlam önsözü (dosyalar/geçmiş) + tip koruması."""
+    monkeypatch.setenv("FCC_WORKSPACE", str(tmp_path))
+    alinan: dict = {}
+
+    class KaydediciOrk(SahteOrkestrator):
+        def __init__(self, ws, log):
+            super().__init__(log)
+            self.ws = ws
+
+        def gorev_calistir(self, gorev, devam=False):
+            alinan.setdefault("gorevler", []).append(gorev)
+            alinan.setdefault("klasorler", []).append(str(self.ws))
+            alinan["tip"] = getattr(self, "_dogrulama_tipi", None)
+            (self.ws / "index.html").write_text("<html></html>", encoding="utf-8")
+            return super().gorev_calistir(gorev, devam)
+
+    monkeypatch.setattr(
+        api, "ORKESTRATOR_FABRIKASI", lambda ws, ex, log: KaydediciOrk(ws, log)
+    )
+
+    # 1) İlk görev (fullstack tetikler) → yeni klasör
+    istemci.post("/api/gorev", json={"gorev": "full-stack todo uygulaması yap"})
+    _bekle_bitsin(istemci)
+    # 2) Takip ("rengi değiştir" — playbook tetiklemez) → AYNI klasör + önsöz + tip miras
+    istemci.post("/api/gorev", json={"gorev": "arka plan rengini koyu yap", "takip": True})
+    veri = _bekle_bitsin(istemci)
+
+    assert alinan["klasorler"][0] == alinan["klasorler"][1]  # aynı klasör
+    takip_gorevi = alinan["gorevler"][1]
+    assert "TAKİP GÖREVİ" in takip_gorevi  # bağlam önsözü eklendi
+    assert "index.html" in takip_gorevi  # mevcut dosyalar listelendi
+    assert "full-stack todo" in takip_gorevi  # önceki istek geçmişte
+    assert alinan["tip"] == "fullstack"  # tip ilk görevden miras
+    assert len(veri["sohbet"]) == 2  # istek geçmişi büyüdü
+
+
+def test_yeni_gorev_sohbeti_sifirlar(istemci, monkeypatch, tmp_path):
+    monkeypatch.setenv("FCC_WORKSPACE", str(tmp_path))
+    monkeypatch.setattr(
+        api, "ORKESTRATOR_FABRIKASI", lambda ws, ex, log: SahteOrkestrator(log)
+    )
+    istemci.post("/api/gorev", json={"gorev": "ilk proje"})
+    _bekle_bitsin(istemci)
+    istemci.post("/api/gorev", json={"gorev": "yepyeni proje"})  # takip DEĞİL
+    veri = _bekle_bitsin(istemci)
+    assert [s["istek"] for s in veri["sohbet"]] == ["yepyeni proje"]
+
+
+def test_onizle_html_canli_backende_yonlendirir(istemci, tmp_path):
+    """Canlı önizleme backend'i varken /onizle/*.html oraya redirect eder."""
+    (tmp_path / "index.html").write_text("<html></html>", encoding="utf-8")
+    api.DURUM.klasor_yolu = tmp_path
+    api.DURUM.onizleme_backend_url = "http://localhost:54321"
+    try:
+        y = istemci.get("/onizle/index.html", follow_redirects=False)
+        assert y.status_code in (302, 307)
+        assert y.headers["location"] == "http://localhost:54321"
+        # HTML olmayan dosyalar yönlendirilmez (statik servis sürer)
+        (tmp_path / "notlar.txt").write_text("x", encoding="utf-8")
+        y2 = istemci.get("/onizle/notlar.txt", follow_redirects=False)
+        assert y2.status_code == 200
+    finally:
+        api.DURUM.onizleme_backend_url = None
+        api.DURUM.klasor_yolu = None
+
+
+def _mini_git_repo(tmp_path):
+    """İki commit'li minik bir repo: geri-al/diff testleri için."""
+    import subprocess
+
+    def git(*a):
+        subprocess.run(
+            ["git", *a], cwd=tmp_path, check=True, capture_output=True, text=True
+        )
+
+    git("init", "-q")
+    git("config", "user.email", "t@t")
+    git("config", "user.name", "t")
+    (tmp_path / "a.txt").write_text("ilk", encoding="utf-8")
+    git("add", "-A")
+    git("commit", "-qm", "ilk")
+    (tmp_path / "a.txt").write_text("ikinci", encoding="utf-8")
+    git("add", "-A")
+    git("commit", "-qm", "degisiklik")
+
+
+def test_degisiklikler_son_commit_diffini_doner(istemci, tmp_path):
+    _mini_git_repo(tmp_path)
+    api.DURUM.klasor_yolu = tmp_path
+    try:
+        y = istemci.get("/api/degisiklikler")
+        assert y.status_code == 200
+        assert "degisiklik" in y.text and "a.txt" in y.text
+    finally:
+        api.DURUM.klasor_yolu = None
+
+
+def test_geri_al_son_commiti_geri_alir(istemci, tmp_path, monkeypatch):
+    _mini_git_repo(tmp_path)
+    api.DURUM.klasor_yolu = tmp_path
+    api.DURUM.calisiyor = False
+    # Önizleme yeniden başlatmayı sahtele (gerçek sunucu açılmasın)
+    monkeypatch.setattr(api, "_onizleme_backendini_baslat", lambda ws: None)
+    try:
+        y = istemci.post("/api/geri-al")
+        assert y.status_code == 200
+        assert (tmp_path / "a.txt").read_text(encoding="utf-8") == "ilk"  # revert etti
+    finally:
+        api.DURUM.klasor_yolu = None
+
+
+def test_geri_al_gorev_calisirken_reddedilir(istemci, tmp_path):
+    _mini_git_repo(tmp_path)
+    api.DURUM.klasor_yolu = tmp_path
+    api.DURUM.calisiyor = True
+    try:
+        assert istemci.post("/api/geri-al").status_code == 409
+    finally:
+        api.DURUM.calisiyor = False
+        api.DURUM.klasor_yolu = None
+
+
 def test_onizleme_backendi_fastapi_yoksa_atlar(tmp_path, monkeypatch):
     from orchestrator import sunucu
 

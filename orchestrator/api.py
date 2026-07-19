@@ -13,6 +13,7 @@ Next.js arayüzünün orkestratörle konuştuğu ince HTTP katmanı:
 from __future__ import annotations
 
 import os
+import subprocess
 import sys
 import threading
 from pathlib import Path
@@ -22,7 +23,7 @@ import mimetypes
 import httpx
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, PlainTextResponse
+from fastapi.responses import FileResponse, PlainTextResponse, RedirectResponse
 from pydantic import BaseModel
 
 from orchestrator.calisma_alani import gorev_klasoru_sec
@@ -55,6 +56,9 @@ class GorevIstegi(BaseModel):
     proje: bool = False  # True: hedef alt görevlere bölünüp zincir halinde koşulur
     onayli: bool = False  # True: her alt görevden sonra kullanıcı onayı beklenir
     tasarim: bool = False  # True: göreve ui-ux-pro-max tasarım sistemi enjekte edilir
+    # True: AYNI proje klasöründe devam — mevcut dosyalar korunur, yalnızca istenen
+    # değişiklik uygulanır ("arka planı değiştir", "buton ekle" gibi takip istekleri)
+    takip: bool = False
 
 
 class OnayKarari(BaseModel):
@@ -93,11 +97,16 @@ class _Durum:
         # Canlı önizleme sunucusu (doğrulama sunucularından ayrı, tek aktif, açık kalır)
         self.onizleme_yoneticisi = None
         self.onizleme_url: str | None = None
-        # Önizleme backend'i: başarılı fullstack/backend görevden sonra {BACKEND_PORT}'te
-        # açık kalır ki /onizle/index.html'in fetch'i canlı backend'e ulaşsın (doğrulama
-        # sunucularından AYRI; Runner'ınki iş sonunda kapanır, bu kalır)
+        # Önizleme backend'i: başarılı fullstack/backend görevden sonra dinamik portta
+        # açık kalır ki göz ikonu bağlı uygulamayı açsın (doğrulama sunucularından AYRI;
+        # Runner'ınki iş sonunda kapanır, bu kalır)
         self.onizleme_backend_yoneticisi = None
         self.onizleme_backend_url: str | None = None
+        # Takip modu (iteratif geliştirme): aynı proje üstündeki istek geçmişi +
+        # ilk görevin playbook tipi (takiplerde doğrulama tipi tutarlı kalsın —
+        # "rengi değiştir" bile fullstack olarak yeniden doğrulanır)
+        self.sohbet: list[dict] = []  # {"istek": str, "basarili": bool}
+        self.proje_tipi: str | None = None
 
 
 DURUM = _Durum()
@@ -109,8 +118,11 @@ def _gorev_kos(istek: GorevIstegi) -> None:
         if istek.model:
             os.environ["FCC_MODEL"] = istek.model
         taban = Path(os.environ.get("FCC_WORKSPACE", "workspace")).resolve()
-        # Görev başına izole klasör: eski görevlerin dosyaları yenisine sızmasın
-        ws = gorev_klasoru_sec(taban, devam=istek.devam, proje=istek.proje)
+        # Görev başına izole klasör; TAKİP modunda ise AYNI klasörde devam edilir
+        # (mevcut dosyalar korunur, yalnızca istenen değişiklik uygulanır)
+        ws = gorev_klasoru_sec(
+            taban, devam=istek.devam or istek.takip, proje=istek.proje
+        )
         DURUM.klasor = f"{taban.name}/{ws.name}"
         DURUM.klasor_yolu = ws
         runner = DockerShellRunner(ws) if istek.docker else None
@@ -132,6 +144,17 @@ def _gorev_kos(istek: GorevIstegi) -> None:
         gorev_metni, playbook_adi = playbook_zenginlestir(gorev_metni)
         if playbook_adi:
             log(f"[tarif] '{playbook_adi}' playbook'u göreve eklendi (portlar + araç akışı).")
+        if istek.takip:
+            # Takip: doğrulama tipi İLK görevden miras kalır ("rengi değiştir" gibi
+            # kısa istekler playbook tetiklemese bile proje fullstack olarak doğrulanır)
+            if playbook_adi is None:
+                playbook_adi = DURUM.proje_tipi
+            # Bağlam önsözü: mevcut dosyalar + önceki istekler + DEĞİŞTİR talimatı
+            gorev_metni = _takip_onsozu(ws) + gorev_metni
+            log("[takip] mevcut proje üzerinde çalışılıyor (dosyalar korunur).")
+        else:
+            DURUM.sohbet = []  # yeni proje: istek geçmişi sıfırlanır
+        DURUM.proje_tipi = playbook_adi or DURUM.proje_tipi
         if istek.proje:
             onay = _onay_bekle if istek.onayli else None
             proje = ProjeOrkestratoru(ws, orkestrator=ork, log=log, onay_callback=onay)
@@ -161,16 +184,48 @@ def _gorev_kos(istek: GorevIstegi) -> None:
                 "plan": state.ciktilar.get("planner", ""),
             }
             # Başarılı fullstack/backend: backend'i önizleme için canlı bırak ki
-            # /onizle/index.html'in fetch'i (localhost:BACKEND_PORT) çalışsın
+            # göz ikonu bağlı uygulamayı açsın
             if DURUM.sonuc["dogrulama_gecti"] and playbook_adi in ("fullstack", "backend"):
                 _onizleme_backendini_baslat(ws)
                 if DURUM.onizleme_backend_url:
                     log(f"[önizleme] backend canlı: {DURUM.onizleme_backend_url} — "
                         "göz ikonuyla açınca liste/ekle/sil çalışır.")
+            # İstek geçmişi: takip önsözünde ve UI thread'inde kullanılır
+            DURUM.sohbet.append(
+                {"istek": istek.gorev, "basarili": DURUM.sonuc["dogrulama_gecti"]}
+            )
     except Exception as e:  # UI'ye okunur hata taşınır
         DURUM.hata = f"{type(e).__name__}: {e}"
     finally:
         DURUM.calisiyor = False
+
+
+def _takip_onsozu(ws: Path) -> str:
+    """Takip görevine eklenen bağlam önsözü: mevcut dosyalar + geçmiş + DEĞİŞTİR talimatı.
+
+    Model sıfırdan yazmasın; mevcut projeyi okuyup yalnızca istenen değişikliği
+    yapsın diye. Dosya listesi diskten (gerçek durum), istek geçmişi DURUM.sohbet'ten.
+    """
+    dosyalar = sorted(
+        p.relative_to(ws).as_posix()
+        for p in ws.rglob("*")
+        if p.is_file()
+        and not any(k in p.parts for k in GIZLENEN_KLASORLER)
+        and not p.name.startswith(".")
+    )[:40]
+    gecmis = "\n".join(
+        f"  {i + 1}. {s['istek'][:120]}" for i, s in enumerate(DURUM.sohbet[-5:])
+    )
+    return (
+        "[TAKİP GÖREVİ — MEVCUT PROJE ÜZERİNDE ÇALIŞ]\n"
+        "Bu klasörde daha önce üretilmiş ÇALIŞAN bir proje var. SIFIRDAN YAZMA:\n"
+        "önce read_file ile ilgili dosyaları incele, sonra istenen değişikliği "
+        "edit_file ile uygula (küçük değişiklikte write_file ile tüm dosyayı yeniden "
+        "yazma). İstenmeyen hiçbir şeyi değiştirme; çalışan özellikleri koru.\n"
+        f"Mevcut dosyalar: {', '.join(dosyalar) if dosyalar else '(boş)'}\n"
+        + (f"Önceki istekler:\n{gecmis}\n" if gecmis else "")
+        + "\nYENİ İSTEK: "
+    )
 
 
 def _onay_bekle(alt: dict) -> bool:
@@ -208,12 +263,13 @@ def gorev_baslat(istek: GorevIstegi):
         DURUM.log = []
         DURUM.hata = None
         DURUM.sonuc = None
-        # Önceki görevin klasörü/dosyaları arayüzde kalmasın: yeni klasör _gorev_kos'ta
-        # belirlenene dek boş göster (eski projenin dosyaları sızmasın)
-        DURUM.klasor = None
-        DURUM.klasor_yolu = None
-    # Önceki önizlemeleri kapat: {BACKEND_PORT}'ü yeni görevin Runner'ına serbest
-    # bırak + eski canlı önizleme (Vite) sunucusunu durdur (port çakışması + sızıntı)
+        if not istek.takip:
+            # Yeni proje: önceki görevin klasörü/dosyaları arayüzde kalmasın
+            # (takipte AYNI klasör sürer — dosyalar bilerek korunur)
+            DURUM.klasor = None
+            DURUM.klasor_yolu = None
+    # Önizlemeleri kapat: dinamik portlar serbest kalsın + sızıntı önlensin
+    # (takipte de kapatılır — görev sonunda güncel haliyle yeniden başlar)
     _onizlemeyi_durdur()
     _onizleme_backendini_durdur()
     threading.Thread(target=_gorev_kos, args=(istek,), daemon=True).start()
@@ -233,6 +289,7 @@ def durum():
         "klasor": DURUM.klasor,
         "onizleme_url": DURUM.onizleme_url,
         "onizleme_backend_url": DURUM.onizleme_backend_url,
+        "sohbet": DURUM.sohbet,
     }
 
 
@@ -287,6 +344,11 @@ def onizle(dosya_yolu: str):
     """
     if DURUM.klasor_yolu is None:
         raise HTTPException(404, "aktif bir görev klasörü yok")
+    # Tek-origin projede index.html göreli fetch kullanır; /onizle statik rotasından
+    # açılırsa istekler 8090'a gidip 404 olur. Canlı önizleme backend'i varsa HTML
+    # isteklerini oraya YÖNLENDİR — göz ikonu, eski link, kas hafızası hepsi çalışır.
+    if DURUM.onizleme_backend_url and dosya_yolu.lower().endswith((".html", ".htm")):
+        return RedirectResponse(DURUM.onizleme_backend_url)
     kok = DURUM.klasor_yolu.resolve()
     hedef = (kok / dosya_yolu).resolve()
     if not hedef.is_relative_to(kok) or not hedef.is_file():
@@ -371,6 +433,60 @@ def _onizleme_backendini_durdur() -> None:
         DURUM.onizleme_backend_yoneticisi.hepsini_durdur()
         DURUM.onizleme_backend_yoneticisi = None
         DURUM.onizleme_backend_url = None
+
+
+def _gorev_git(*args: str) -> subprocess.CompletedProcess:
+    """Aktif görev klasörünün KENDİ git reposunda komut çalıştırır."""
+    return subprocess.run(
+        ["git", *args],
+        cwd=DURUM.klasor_yolu,
+        capture_output=True,
+        text=True,
+        errors="replace",
+        timeout=30,
+    )
+
+
+@app.get("/api/degisiklikler")
+def degisiklikler():
+    """Son commit'in diff'ini döndürür ("Değişiklikleri Gör").
+
+    Görev klasörünün kendi reposu (git_deposu) her görevi commit'ler; son commit
+    = son görevin/takibin dokunduğu her şey.
+    """
+    if DURUM.klasor_yolu is None or not (DURUM.klasor_yolu / ".git").exists():
+        raise HTTPException(404, "aktif görevde git tarihçesi yok")
+    try:
+        sonuc = _gorev_git("show", "--stat", "-p", "--no-color", "HEAD")
+    except (OSError, subprocess.SubprocessError) as e:
+        raise HTTPException(500, f"git çalıştırılamadı: {e}")
+    if sonuc.returncode != 0:
+        raise HTTPException(404, "gösterilecek commit yok")
+    return PlainTextResponse(sonuc.stdout[:200_000])
+
+
+@app.post("/api/geri-al")
+def geri_al():
+    """Son değişikliği geri alır ("Geri Al") ve önizleme backend'ini yeniler.
+
+    git revert: tarihçe korunur (reset'ten güvenli); revert de bir commit olduğundan
+    tekrar 'Geri Al' ile geri-alınan geri getirilebilir.
+    """
+    if DURUM.calisiyor:
+        raise HTTPException(409, "görev çalışırken geri alınamaz")
+    if DURUM.klasor_yolu is None or not (DURUM.klasor_yolu / ".git").exists():
+        raise HTTPException(404, "aktif görevde git tarihçesi yok")
+    try:
+        sonuc = _gorev_git("revert", "--no-edit", "HEAD")
+    except (OSError, subprocess.SubprocessError) as e:
+        raise HTTPException(500, f"git çalıştırılamadı: {e}")
+    if sonuc.returncode != 0:
+        raise HTTPException(
+            409, f"geri alma başarısız: {(sonuc.stderr or sonuc.stdout)[:300]}"
+        )
+    # Önizleme, dosyaların güncel (geri alınmış) haliyle yeniden başlasın
+    _onizleme_backendini_baslat(DURUM.klasor_yolu)
+    return {"geri_alindi": True, "onizleme_backend_url": DURUM.onizleme_backend_url}
 
 
 @app.get("/api/saglik")
