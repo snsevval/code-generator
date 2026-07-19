@@ -5,8 +5,7 @@ doğrulayan çok-ajanlı kod üretim sistemi. LLM erişimi
 [free-claude-code](https://github.com/Alishahryar1/free-claude-code) proxy'si üzerinden
 sağlanır (NVIDIA NIM / Gemini / Groq).
 
-Temel ilke: kod, üretildiği için değil, çalıştığı kanıtlandığı için doğrudur. Her çıktı
-gerçekten çalıştırılır; testler koşulur, sunucu ayağa kaldırılır, sayfa tarayıcıda açılıp
+Her çıktı gerçekten çalıştırılır; testler koşulur, sunucu ayağa kaldırılır, sayfa tarayıcıda açılıp
 backend bağlantısı ağ düzeyinde doğrulanır.
 
 Ayrıntılı dokümantasyon: [docs/PROJE_RAPORU.md](docs/PROJE_RAPORU.md) ·
