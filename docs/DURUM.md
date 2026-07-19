@@ -117,8 +117,7 @@ işlerde KAPALI tut — imajda node yok).
 4. Faz 5 kalanları: görev kuyruğu, Docker sandbox'ı varsayılan yapmak, model karşılaştırma raporu.
 5. Faz 6 (planlandı, başlanmadı): API bağlama yeteneği — sır yönetimi (.env enjeksiyonu),
    pip/npm bağımlılık politikası, Docker'da seçmeli ağ.
-6. **Güvenlik hijyeni (kullanıcıda):** Gemini ve Groq anahtarları sohbete yapıştırılmıştı —
-   yenilenmeli (aistudio.google.com/apikey, console.groq.com).
+
 
 ## Bilinen kısıtlar / notlar
 
