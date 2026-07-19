@@ -1,46 +1,81 @@
 # code-generator
 
-[free-claude-code](https://github.com/Alishahryar1/free-claude-code) proxy'sini LLM erişim
-katmanı olarak kullanan agentic kod üretim ürünü. Ayrıntılı yol haritası:
-[docs/task_plan.md](docs/task_plan.md)
+Doğal dille verilen görevi alıp kodu kendi yazan, test eden, hatasını düzeltip çalıştırarak
+doğrulayan çok-ajanlı kod üretim sistemi. LLM erişimi
+[free-claude-code](https://github.com/Alishahryar1/free-claude-code) proxy'si üzerinden
+sağlanır (NVIDIA NIM / Gemini / Groq).
+
+Temel ilke: kod, üretildiği için değil, çalıştığı kanıtlandığı için doğrudur. Her çıktı
+gerçekten çalıştırılır; testler koşulur, sunucu ayağa kaldırılır, sayfa tarayıcıda açılıp
+backend bağlantısı ağ düzeyinde doğrulanır.
+
+Ayrıntılı dokümantasyon: [docs/PROJE_RAPORU.md](docs/PROJE_RAPORU.md) ·
+[docs/DURUM.md](docs/DURUM.md) · [docs/task_plan.md](docs/task_plan.md)
+
+## Özellikler
+
+- **Altı uzman ajan:** Planner, Codegen, Validator, Debugger, Reviewer, Decomposer —
+  hepsi aynı modele verilen farklı rol talimatları.
+- **Deterministik doğrulama (Runner):** backend görevlerinde pytest izole koşulur
+  (`PYTEST_DISABLE_PLUGIN_AUTOLOAD`) ve uvicorn ayağa kaldırılır; full-stack görevlerde
+  frontend tarayıcıda açılıp backend'e gerçekten fetch attığı ağ düzeyinde kanıtlanır.
+  Backend'e bağlanmayan sayfa geçemez.
+- **Tek-origin full-stack:** backend `index.html`'i kök dizinden servis eder, frontend
+  göreli `fetch` kullanır — sabit port ve CORS gerekmez.
+- **Dosya-odaklı ajanlar:** backend/full-stack görevlerinde Codegen ve Debugger yalnızca
+  dosya yazar/düzenler; test koşma, sunucu yönetimi ve doğrulama tamamen sisteme aittir
+  (zayıf modellerin kabuk/ortam debelenmesi mekanik olarak engellenir).
+- **Takip modu (iteratif geliştirme):** proje bitince aynı oturumda "arka planı değiştir",
+  "buton ekle" gibi isteklerle aynı proje üzerinde devam edilir; mevcut dosyalar korunur,
+  sistem bağlamı (dosya listesi + istek geçmişi) otomatik ekler.
+- **Kalıcı canlı önizleme:** başarılı görevden sonra üretilen backend dinamik bir portta
+  açık kalır; göz simgesi çalışan uygulamayı açar. `/onizle/*.html` istekleri canlı
+  backend'e otomatik yönlendirilir.
+- **Değişiklik geçmişi:** her görev kendi klasöründe git ile kaydedilir;
+  `GET /api/degisiklikler` son değişikliği gösterir, `POST /api/geri-al` geri alır.
+- **Playbook katmanı:** görev tipi (backend / full-stack / vite / frontend) otomatik
+  tanınır; portlar, dosya listesi ve doğrulama tarifi göreve sistem tarafından eklenir —
+  kullanıcı teknik ayrıntı yazmaz.
+- **Mekanik korumalar:** izole görev klasörleri, sahte-başarı engeli, boş-çıktı dürtüsü,
+  tekrar kilidi, debelenme detektörü, ortam-kurcalama reddi (pip un/install, eklenti
+  kapatma), arka plan süreç reddi ve diğerleri — her biri gerçek bir kazadan doğdu.
 
 ## Kurulum
 
 ```powershell
 uv sync
+uv run playwright install chromium   # tarayıcı doğrulaması için
 ```
 
-## Faz 0 — Tool-use tutarlılık testi
+## Çalıştırma
 
-Önce proxy'yi ayrı bir terminalde başlatın (`http://localhost:8082` üzerinde çalışmalı):
+Üç sunucu gerekir:
 
 ```powershell
-fcc-server
+# 1) LLM proxy (ayrı klasördeki free-claude-code projesinden)
+cd C:\...\free-claude-code
+uv run fcc-server                    # http://localhost:8082
+
+# 2) Backend API (bu projenin kökünde)
+uv run uvicorn orchestrator.api:app --port 8090
+
+# 3) Web arayüzü
+cd ui
+npm run dev                          # http://localhost:3000
 ```
 
-Sonra testi çalıştırın:
+Sonra http://localhost:3000 adresinde görevi doğal dille yaz, ajan akışını canlı izle,
+bitince "Projeye devam et" kutusundan aynı proje üzerinde değişiklik iste.
 
-```powershell
-# Ayrıntılı rapor ile (önerilen) — model açıkça belirtilmeli, bkz. docs/task_plan.md bulguları
-$env:FCC_TEST_MODEL = 'gemini/gemini-2.5-flash'
-uv run python tests/test_tool_use_consistency.py
+Örnek görev:
 
-# veya pytest ile
-uv run pytest tests/test_tool_use_consistency.py -s
+```
+Basit bir görev listesi (todo) full-stack uygulaması yap: FastAPI backend görev ekleme,
+listeleme ve silme uçlarıyla; tek sayfalık arayüz backend'e fetch ile bağlanıp listeyi
+göstersin, ekleme ve silme yapsın; pytest ile test et.
 ```
 
-Ortam değişkenleri: `FCC_TEST_MODEL` (model, `provider/model` biçimi doğrudan yönlendirir),
-`FCC_TEST_REPEAT` (deneme sayısı, varsayılan 10), `FCC_TEST_DELAY` (denemeler arası saniye,
-varsayılan 5), `ANTHROPIC_AUTH_TOKEN` (proxy giriş anahtarı; proxy'deki `~/.fcc/.env` ile
-aynı olmalı, varsayılan `freecc`).
-
-Script aynı tool tanımlı isteği proxy'ye 10 kez gönderir; her cevapta `tool_use` bloğunun
-varlığını, tool adının doğruluğunu (`read_file`) ve zorunlu `path` parametresinin geçerliliğini
-kontrol eder. Sonunda `X/10 başarılı` özeti ve başarısızlıkların hata tipi dağılımını basar.
-
-## Faz 2 — Agentic döngü
-
-Proxy açıkken bir görevi uçtan uca çalıştırmak için:
+Komut satırından kullanım:
 
 ```powershell
 uv run python -m orchestrator "fibonacci hesaplayan küçük bir CLI aracı yaz"
@@ -48,35 +83,45 @@ uv run python -m orchestrator "fibonacci hesaplayan küçük bir CLI aracı yaz"
 # Seçenekler:
 #   --workspace <klasör>  çalışma alanı (varsayılan: workspace)
 #   --docker              run_shell komutlarını ağa kapalı Docker sandbox'ta koşar
-#   --devam               kesilen görevi .state/oturum.json'dan sürdürür
-#   --proje               büyük hedef modu: Decomposer hedefi alt görevlere böler,
-#                         her biri tam döngüyle sırayla koşulur (Faz 4)
+#   --devam               kesilen görevi kaldığı yerden sürdürür
+#   --proje               büyük hedef modu: hedef alt görevlere bölünüp sırayla koşulur
 ```
 
-Akış: Planner → Codegen → Test/Validator → (başarısızsa Debugger, en çok 3 tur) → Reviewer.
-Model seçimi: `FCC_MODEL` tüm ajanları, `FCC_MODEL_PLANNER` gibi değişkenler tek ajanı
-değiştirir (varsayılan: `gemini/gemini-2.5-flash`).
+## Model seçimi
 
-## Faz 3 — Web arayüzü
+İstekler proxy'nin varsayılan rotasına gider (`~/.fcc/.env` içindeki `MODEL`; şu an
+NVIDIA NIM Nemotron). Ortam değişkenleriyle değiştirilebilir:
 
-İki sunucu gerekir (proxy'ye ek olarak):
+- `FCC_MODEL` — tüm ajanlar için model (`provider/model` biçimi doğrudan yönlendirir)
+- `FCC_MODEL_CODEGEN` gibi ajan-özel değişkenler tek ajanı değiştirir
+- `ANTHROPIC_AUTH_TOKEN` — proxy giriş anahtarı (proxy'deki `~/.fcc/.env` ile aynı olmalı)
+
+Yeni bir model kullanmadan önce tutarlılık kapısından geçirin (10/10 geçerli tool-use
+beklenir):
 
 ```powershell
-# 1) Backend API (proje kökünde)
-uv run uvicorn orchestrator.api:app --port 8090
-
-# 2) Next.js arayüzü
-cd ui
-npm run dev
+$env:FCC_TEST_MODEL = 'nvidia_nim/deepseek-ai/deepseek-v4-flash'
+uv run python tests/test_tool_use_consistency.py
 ```
 
-Sonra http://localhost:3000 — görev yaz, modeli seç, ajanların ilerleyişini canlı izle.
+## Testler
+
+```powershell
+uv run pytest          # tam paket (200+ test; proxy gerektirenler otomatik atlanır)
+```
 
 ## Proje yapısı
 
-| Klasör          | İçerik                                              |
-| --------------- | --------------------------------------------------- |
-| `orchestrator/` | Orkestratör, Tool Executor ve ajanlar (Faz 1–2)     |
-| `tests/`        | Testler                                             |
-| `workspace/`    | Ajanların üzerinde çalışacağı izole çalışma alanı   |
-| `docs/`         | Plan ve dokümantasyon                               |
+| Klasör / dosya                     | İçerik                                                            |
+| ---------------------------------- | ----------------------------------------------------------------- |
+| `orchestrator/loop.py`             | Orkestratör: ajan döngüsü, aşama akışı, mekanik korumalar         |
+| `orchestrator/agents.py`           | Ajan tanımları (prompt, araç listesi, model rotası)               |
+| `orchestrator/tool_executor.py`    | Araçlar: dosya, kabuk, tarayıcı, sunucu (workspace'e hapsedilmiş) |
+| `orchestrator/fullstack_runner.py` | Deterministik doğrulama: pytest + uvicorn + entegrasyon kanıtı    |
+| `orchestrator/playbook.py`         | Görev tipi tespiti ve teknik tarif enjeksiyonu                    |
+| `orchestrator/api.py`              | Web arayüzünün konuştuğu FastAPI (görev, takip, önizleme, geri-al)|
+| `orchestrator/sunucu.py`           | Arka plan süreç yönetimi, dinamik port, sızıntı önleme            |
+| `ui/`                              | Next.js arayüzü (görev, canlı log, dosyalar, takip)               |
+| `tests/`                           | Test paketi                                                       |
+| `workspace/`                       | Görev başına izole çalışma klasörleri                             |
+| `docs/`                            | Rapor, durum ve yol haritası                                      |
