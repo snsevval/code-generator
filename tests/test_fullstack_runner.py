@@ -208,6 +208,30 @@ def test_fullstack_buton_tetiklemeli_fetch_gecer(tmp_path):
     assert rapor.gecti is True, rapor.detay
 
 
+# Input GEREKTİREN buton: boş girdide "değer gir" deyip fetch atmaz; Runner önce
+# input'u doldurup tıklamalı (canlıda sıcaklık çevirici böyle yanlış 'bağlantısız' sayıldı)
+FRONTEND_INPUT_GEREKTIREN = (
+    "<!DOCTYPE html><html><head><meta charset='utf-8'><title>C</title></head><body>"
+    "<input type='number' id='deger'><button id='b'>Gönder</button><div id='s'></div>"
+    "<script>document.getElementById('b').addEventListener('click', function(){"
+    "var v = document.getElementById('deger').value.trim();"
+    "if (v === '') { document.getElementById('s').textContent='değer gir'; return; }"
+    "fetch('/items').then(r=>r.json()).then(d=>{"
+    "document.getElementById('s').textContent=JSON.stringify(d);});});"
+    "</script></body></html>"
+)
+
+
+@pytest.mark.skipif(not _TARAYICI, reason="playwright chromium yok")
+def test_fullstack_input_gerektiren_buton_gecer(tmp_path):
+    # Runner boş input'u doldurup tıklamalı ki fetch atılsın → BAŞARILI
+    ws = _ws(tmp_path)
+    (ws / "backend.py").write_text(BACKEND_ITEMS, encoding="utf-8")
+    (ws / "index.html").write_text(FRONTEND_INPUT_GEREKTIREN, encoding="utf-8")
+    rapor = FullstackRunner(ws).fullstack_dogrula()
+    assert rapor.gecti is True, rapor.detay
+
+
 @pytest.mark.skipif(not _TARAYICI, reason="playwright chromium yok")
 def test_fullstack_kopuk_frontend_basarisiz(tmp_path):
     ws = _ws(tmp_path)

@@ -447,11 +447,23 @@ class FullstackRunner:
                 sayfa.on("response", _yanit)
                 sayfa.goto(url, wait_until="networkidle", timeout=SAYFA_ZAMAN_ASIMI_MS)
                 sayfa.wait_for_timeout(FETCH_BEKLEME_MS)
-                # Açılışta fetch yoksa sayfa buton-tetiklemeli olabilir (örn. "Hesapla"):
-                # ilk butona tıklayıp bir şans daha ver (canlıda yörünge uygulaması
-                # yanlışlıkla 'bağlantısız' sayıldı — form doldurulup basılınca fetch atıyordu)
+                # Açılışta fetch yoksa sayfa buton-tetiklemeli olabilir (örn. "Çevir"):
+                # önce boş girdileri doldur (input boşken form "değer girin" deyip fetch
+                # atmıyordu — sıcaklık çevirici canlıda böyle yanlış 'bağlantısız' sayıldı),
+                # sonra ilk butona tıkla ve bir şans daha ver.
                 if not api_yanitlari:
                     try:
+                        girdiler = sayfa.locator(
+                            "input:not([type=checkbox]):not([type=radio]):"
+                            "not([type=submit]):not([type=button]):not([type=hidden])"
+                        )
+                        for i in range(girdiler.count()):
+                            alan = girdiler.nth(i)
+                            try:
+                                tip = (alan.get_attribute("type") or "text").lower()
+                                alan.fill("25" if tip == "number" else "test", timeout=1000)
+                            except Exception:
+                                pass  # doldurulamayan alanı atla
                         sayfa.locator("button, input[type=submit]").first.click(timeout=2000)
                         sayfa.wait_for_timeout(FETCH_BEKLEME_MS + 500)
                     except Exception:
