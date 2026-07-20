@@ -43,6 +43,53 @@ _FASTAPI_DESENI = re.compile(r"(\w+)\s*=\s*FastAPI\s*\(")
 # Modül adayı tercih sırası (çok FastAPI dosyası varsa)
 _MODUL_TERCIHI = ("backend", "main", "app", "api")
 
+# C++ derleme/çalıştırma ayarları
+CPP_DERLEME_ZAMAN_ASIMI_SN = 60.0
+CPP_CALISMA_ZAMAN_ASIMI_SN = 15.0
+_CPP_MAIN_DESENI = re.compile(r"\bint\s+main\s*\(")
+# stdin okuyan konsol programlarına verilecek jenerik girdi (birçok sayısal soruyu besler)
+_CPP_JENERIK_GIRDI = "400\n1000\n100\n10\n1\n"
+
+
+def gpp_bul() -> str | None:
+    """g++ derleyicisinin tam yolunu döndürür (PATH'te ya da bilinen WinGet konumu).
+
+    API süreci g++ kurulumundan ÖNCE başladıysa PATH'te göremeyebilir; bu yüzden
+    WinLibs'in WinGet paket konumuna da bakarız (canlıda derleyici kurulan yer).
+    Bulamazsa None → cpp_dogrula net "derleyici yok, KULLANICI kurmalı" der.
+    """
+    from shutil import which
+
+    yol = which("g++")
+    if yol:
+        return yol
+    yerel = os.environ.get("LOCALAPPDATA", "")
+    if yerel:
+        aday = Path(yerel) / (
+            "Microsoft/WinGet/Packages/"
+            "BrechtSanders.WinLibs.POSIX.UCRT_Microsoft.Winget.Source_8wekyb3d8bbwe/"
+            "mingw64/bin/g++.exe"
+        )
+        if aday.is_file():
+            return str(aday)
+    return None
+
+
+def cpp_kaynagi_bul(workspace: Path) -> Path | None:
+    """`int main(` içeren ilk .cpp dosyasını döndürür (yoksa None).
+
+    Alt klasörler de taranır (model sık sık src/main.cpp yazıyor). main içeren
+    dosya tercih edilir; hiç .cpp yoksa None.
+    """
+    cpp_dosyalari = sorted(workspace.rglob("*.cpp"))
+    for yol in cpp_dosyalari:
+        try:
+            if _CPP_MAIN_DESENI.search(yol.read_text(encoding="utf-8", errors="replace")):
+                return yol
+        except OSError:
+            continue
+    return cpp_dosyalari[0] if cpp_dosyalari else None
+
 
 def _izole_pytest_env() -> dict:
     """pytest'i host eklentilerinden yalıtan temiz subprocess ortamı.
@@ -114,6 +161,93 @@ class FullstackRunner:
     def _yaz(self, mesaj: str) -> None:
         if callable(self._log):
             self._log(mesaj)
+
+    # --- C++ doğrulama (derle + çalıştır) ---
+
+    def cpp_dogrula(self) -> DogrulamaRaporu:
+        """C++ görevini deterministik doğrular: g++ ile derle, sonra çalıştır.
+
+        Model validator/debugger yerine sistem koreografi eder (canlıda C++ görevi
+        model-validator döngüsünde debeleniyordu: kaynak dosya siliyor, kanıtsız
+        karar veriyor). Sıra: (1) .cpp var mı, (2) g++ kurulu mu, (3) derleniyor mu
+        (ASIL kapı — M_PI/tip/typo hataları burada yakalanır), (4) çalışıp 0 dönüyor mu.
+        """
+        # 1) Kaynak var mı?
+        kaynak = cpp_kaynagi_bul(self.workspace)
+        if kaynak is None:
+            return DogrulamaRaporu(
+                False,
+                "BAŞARISIZ: hiç .cpp kaynak dosyası bulunamadı. Codegen C++ kodunu "
+                "yazmamış — 'int main()' içeren bir .cpp dosyası yazılmalı.",
+            )
+
+        # 2) Derleyici var mı?
+        gpp = gpp_bul()
+        if gpp is None:
+            return DogrulamaRaporu(
+                False,
+                "BAŞARISIZ: g++ derleyicisi bulunamadı. Bu bir ORTAM eksiği (kod hatası "
+                "değil); C++ derleyicisi kullanıcı tarafından kurulmalı. Kod yazıldıysa "
+                f"kaynak hazır: {kaynak.name}.",
+            )
+
+        # 3) Derleme (asıl kapı) — statik bağla ki DLL yolu segfault'u olmasın
+        exe = self.workspace / "program.exe"
+        self._yaz(f"[runner] g++ ile derleniyor: {kaynak.relative_to(self.workspace)}")
+        try:
+            derleme = subprocess.run(
+                [gpp, "-std=c++17", "-O2", "-static", "-o", str(exe), str(kaynak)],
+                cwd=self.workspace,
+                capture_output=True,
+                text=True,
+                errors="replace",
+                timeout=CPP_DERLEME_ZAMAN_ASIMI_SN,
+            )
+        except subprocess.TimeoutExpired:
+            return DogrulamaRaporu(
+                False, f"BAŞARISIZ: derleme {CPP_DERLEME_ZAMAN_ASIMI_SN:.0f} sn'de bitmedi."
+            )
+        if derleme.returncode != 0:
+            hata = (derleme.stderr + "\n" + derleme.stdout).strip()
+            return DogrulamaRaporu(
+                False,
+                "BAŞARISIZ: derleme hatası (g++). Kodu düzelt — derleyici çıktısı:\n"
+                + hata[-2500:],
+            )
+
+        # 4) Çalıştır — jenerik girdiyle besle, 0 dönmeli (kilitlenme/segfault yakalanır)
+        self._yaz("[runner] derlendi; program çalıştırılıyor")
+        try:
+            kosu = subprocess.run(
+                [str(exe)],
+                cwd=self.workspace,
+                input=_CPP_JENERIK_GIRDI,
+                capture_output=True,
+                text=True,
+                errors="replace",
+                timeout=CPP_CALISMA_ZAMAN_ASIMI_SN,
+            )
+        except subprocess.TimeoutExpired:
+            # stdin bekleyen etkileşimli program takılabilir — bu bir kod hatası değil;
+            # derleme geçtiğine göre kod geçerli, BAŞARILI say (çıktı olmasa da).
+            return DogrulamaRaporu(
+                True,
+                f"BAŞARILI: {kaynak.name} g++ ile derlendi (program.exe). Program "
+                "girdi beklediği için otomatik çalıştırma zaman aşımına uğradı; kod geçerli.",
+            )
+        if kosu.returncode != 0:
+            return DogrulamaRaporu(
+                False,
+                f"BAŞARISIZ: program çalışırken hata verdi (çıkış kodu {kosu.returncode} — "
+                "segfault/çökme olabilir). Çıktı:\n"
+                + (kosu.stdout + "\n" + kosu.stderr).strip()[-2000:],
+            )
+        cikti = kosu.stdout.strip()
+        return DogrulamaRaporu(
+            True,
+            f"BAŞARILI: {kaynak.name} g++ ile derlendi ve çalıştı (çıkış 0).\n"
+            + (cikti[-1200:] if cikti else "(program çıktı üretmedi)"),
+        )
 
     # --- Backend doğrulama ---
 

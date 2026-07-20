@@ -30,6 +30,10 @@ from orchestrator.playbook import (
         ("npm kullanan gerçek React projesi kur", "vite"),
         ("fibonacci hesaplayan CLI aracı yaz, pytest ile", None),  # playbook'suz
         ("csv dosyasını okuyup ortalama hesaplayan script", None),
+        ("C++ ile uydu yörüngesi hesaplayan program yaz", "cpp"),
+        ("std::cout kullanan bir hesap makinesi cpp dosyası", "cpp"),
+        # C++ + web arayüzü açıkça istenirse full-stack kazanır (cpp değil)
+        ("C++ hesabını gösteren full-stack FastAPI arayüzü ekle", "fullstack"),
     ],
 )
 def test_playbook_tespiti(gorev, beklenen):

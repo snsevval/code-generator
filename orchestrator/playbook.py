@@ -97,6 +97,22 @@ Statik sayfa akışı — sırasıyla:
 2. DOĞRULAMA: check_page index.html (statik dosya için dosya yolu yeterli) —
    konsol hatasız olmalı, görsel analiz bulgularını edit_file ile düzelt.
 """,
+    "cpp": """
+[C++ GÖREVİ — SADECE DOSYA YAZ]
+Sen YALNIZCA kaynak dosyaları yazarsın. Derleme ve çalıştırmayı SİSTEM yapar
+(g++ -std=c++17 -static). Şunları YAPMA:
+- Derleyici ARAMA (where g++, cl, clang...) — sistem g++'ı bulur.
+- Derleyici/araç KURMA (winget/choco/pacman/msys2/llvm...) — YASAK, reddedilir.
+- run_shell ile derleme/çalıştırma deneme — sistem koreografı eder.
+Kod kuralları:
+1. Tek bir main.cpp yaz ('int main()' içeren). Gereksiz ikinci dosya/kopya YAZMA.
+2. Pi gerekiyorsa: dosyanın EN BAŞINA '#define _USE_MATH_DEFINES' yaz (MSVC/g++
+   uyumu) VEYA M_PI yerine 'const double PI = std::acos(-1.0);' kullan.
+3. Kod temiz, yorumlu ve çalıştırılabilir olsun; girdi okuyorsa std::cin ile oku.
+4. Kısa bir README.md ile derleme/çalıştırma komutunu belgele.
+Sistem: g++ ile derler (derleme ASIL sınav — tip/typo/M_PI hataları burada yakalanır),
+sonra programı çalıştırır. Sen sadece kaynağı yaz, kısa özetle bitir.
+""",
 }
 
 # Tespit desenleri (küçük harfe indirgenmiş metinde aranır)
@@ -104,11 +120,16 @@ _BACKEND_SINYALI = re.compile(r"backend|fastapi|flask|api uç|endpoint|sunucu ta
 _FRONTEND_SINYALI = re.compile(r"frontend|arayüz|sayfa|site|html|görsel|tasarım|ön yüz|ui")
 _VITE_SINYALI = re.compile(r"\bvite\b|\bnext\.?js\b|npm|gerçek react projesi")
 _FULLSTACK_SINYALI = re.compile(r"full[ -]?stack|fullstack")
+_CPP_SINYALI = re.compile(r"\bc\+\+|\bcpp\b|\.cpp\b|g\+\+|std::|iostream")
 
 
 def playbook_sec(gorev: str) -> str | None:
     """Görev metnine uygun playbook adını döndürür (yoksa None)."""
     metin = gorev.lower()
+    # C++ sinyali web sinyallerinden ÖNCE gelir (C++ görevi web değildir; "arayüz"
+    # geçse bile — web arayüzü ancak açık FastAPI/full-stack ifadesiyle istenir).
+    if _CPP_SINYALI.search(metin) and not _FULLSTACK_SINYALI.search(metin):
+        return "cpp"
     backend = bool(_BACKEND_SINYALI.search(metin))
     frontend = bool(_FRONTEND_SINYALI.search(metin))
     if _FULLSTACK_SINYALI.search(metin) or (backend and frontend):

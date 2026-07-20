@@ -73,6 +73,13 @@ _DEBUGGER_BACKEND_NOTU = (
     "Örn. 'frontend backend'e istek atmadı' ise index.html'deki fetch yolunu düzelt "
     "(göreli '/todos') veya backend index.html'i `/` kökünde servis etmiyorsa ekle."
 )
+_CPP_NOTU = (
+    "\n\nÖNEMLİ (bu görev): YALNIZCA .cpp kaynağını (ve kısa README) yaz. Derlemeyi ve "
+    "çalıştırmayı SİSTEM yapar (g++ -std=c++17 -static). Derleyici ARAMA, KURMA, run_shell "
+    "ile derleme deneme — araçların yok. Pi için dosyanın en başına '#define _USE_MATH_DEFINES' "
+    "yaz ya da 'std::acos(-1.0)' kullan. Derleme hatası verilirse ilgili satırı edit_file ile "
+    "düzelt ve DUR — sistem yeniden derler."
+)
 
 # Şema uyarısı için: araç adı → geçerli parametre adları
 _ARAC_PARAMETRELERI = {
@@ -166,11 +173,14 @@ class Orkestrator:
         # diğer tüm durumlarda ajan tam araç setini kullanır.
         araclar_adlari = ajan.araclar
         sistem = ajan.sistem_prompt
-        if self._dogrulama_tipi in ("backend", "fullstack") and ajan.ad in ("codegen", "debugger"):
+        if self._dogrulama_tipi in ("backend", "fullstack", "cpp") and ajan.ad in ("codegen", "debugger"):
             araclar_adlari = tuple(a for a in araclar_adlari if a in _YALNIZ_DOSYA_ARACLARI)
-            sistem = sistem + (
-                _CODEGEN_BACKEND_NOTU if ajan.ad == "codegen" else _DEBUGGER_BACKEND_NOTU
-            )
+            if self._dogrulama_tipi == "cpp":
+                sistem = sistem + _CPP_NOTU
+            else:
+                sistem = sistem + (
+                    _CODEGEN_BACKEND_NOTU if ajan.ad == "codegen" else _DEBUGGER_BACKEND_NOTU
+                )
         araclar = [t for t in TOOL_TANIMLARI if t["name"] in araclar_adlari]
         mesajlar: list[dict] = [{"role": "user", "content": gorev_metni}]
         self.son_arac_sayisi = 0
@@ -428,6 +438,8 @@ class Orkestrator:
         runner = FullstackRunner(self.executor.workspace, log=self._yaz)
         if self._dogrulama_tipi == "fullstack":
             rapor = runner.fullstack_dogrula()
+        elif self._dogrulama_tipi == "cpp":
+            rapor = runner.cpp_dogrula()
         else:
             rapor = runner.backend_dogrula()
         self._yaz(f"[runner] doğrulama: {'BAŞARILI' if rapor.gecti else 'BAŞARISIZ'}")
@@ -439,7 +451,7 @@ class Orkestrator:
         'backend'/'fullstack' tipinde deterministik Runner; aksi halde klasik
         model-doğrulama (kanıt şartı + işaret netleştirme).
         """
-        if self._dogrulama_tipi in ("backend", "fullstack"):
+        if self._dogrulama_tipi in ("backend", "fullstack", "cpp"):
             return self._deterministik_dogrula()
         dogrulama = self._kanitli_dogrulama(
             state, f"Görev: {gorev}\n\nPlan:\n{plan}\n\nÜretilen işi doğrula."

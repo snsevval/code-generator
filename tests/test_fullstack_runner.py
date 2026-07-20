@@ -15,7 +15,9 @@ from orchestrator.calisma_alani import gorev_klasoru_sec
 from orchestrator.fullstack_runner import (
     FullstackRunner,
     bos_port_bul,
+    cpp_kaynagi_bul,
     fastapi_uygulamasi_bul,
+    gpp_bul,
 )
 
 # uvicorn/fastapi yoksa sunucu-başlatan testler anlamsız
@@ -222,3 +224,64 @@ def test_fullstack_frontend_yoksa_basarisiz(tmp_path):
     rapor = FullstackRunner(ws).fullstack_dogrula()
     assert rapor.gecti is False
     assert "index.html" in rapor.detay or "frontend" in rapor.detay.lower()
+
+
+# --- C++ doğrulama (g++ ile derle + çalıştır) ---
+
+_GPP = gpp_bul()
+
+CPP_OK = (
+    "#include <iostream>\n"
+    "int main() {\n"
+    "    double a, b;\n"
+    "    std::cin >> a >> b;\n"
+    "    std::cout << (a + b) << std::endl;\n"
+    "    return 0;\n"
+    "}\n"
+)
+# Derleme hatası: tanımsız değişken (canlıda 'TodoModel'/'const' tipi hataları gibi)
+CPP_DERLEME_HATASI = (
+    "#include <iostream>\n"
+    "int main() {\n"
+    "    std::cout << tanimsiz_degisken << std::endl;\n"
+    "    return 0;\n"
+    "}\n"
+)
+
+
+def test_cpp_kaynak_bulma_alt_klasor(tmp_path):
+    ws = _ws(tmp_path)
+    (ws / "src").mkdir()
+    (ws / "src" / "main.cpp").write_text(CPP_OK, encoding="utf-8")
+    bulunan = cpp_kaynagi_bul(ws)
+    assert bulunan is not None and bulunan.name == "main.cpp"
+
+
+def test_cpp_kaynak_yoksa_none(tmp_path):
+    ws = _ws(tmp_path)
+    assert cpp_kaynagi_bul(ws) is None
+
+
+def test_cpp_kaynak_yoksa_basarisiz(tmp_path):
+    ws = _ws(tmp_path)
+    rapor = FullstackRunner(ws).cpp_dogrula()
+    assert rapor.gecti is False
+    assert ".cpp" in rapor.detay
+
+
+@pytest.mark.skipif(not _GPP, reason="g++ derleyicisi yok")
+def test_cpp_dogru_kod_derlenir_ve_calisir(tmp_path):
+    ws = _ws(tmp_path)
+    (ws / "main.cpp").write_text(CPP_OK, encoding="utf-8")
+    rapor = FullstackRunner(ws).cpp_dogrula()
+    assert rapor.gecti is True, rapor.detay
+    assert (ws / "program.exe").is_file()
+
+
+@pytest.mark.skipif(not _GPP, reason="g++ derleyicisi yok")
+def test_cpp_derleme_hatasi_basarisiz(tmp_path):
+    ws = _ws(tmp_path)
+    (ws / "main.cpp").write_text(CPP_DERLEME_HATASI, encoding="utf-8")
+    rapor = FullstackRunner(ws).cpp_dogrula()
+    assert rapor.gecti is False
+    assert "derleme" in rapor.detay.lower()
