@@ -34,6 +34,7 @@ type Durum = {
   onizleme_url: string | null;
   onizleme_backend_url: string | null;
   sohbet: { istek: string; basarili: boolean }[];
+  iptal_istendi: boolean;
 };
 
 type Saglik = { api: boolean; proxy: boolean };
@@ -427,6 +428,16 @@ export default function Anasayfa() {
     }
   }
 
+  // Çalışan görevi iptal et (yanlış görev gönderildiğinde yeni projeye geçebilmek için)
+  async function iptalEt() {
+    try {
+      await fetch(`${API}/api/iptal`, { method: "POST" });
+      await durumuGetir();
+    } catch (err) {
+      setGonderimHatasi(err instanceof Error ? err.message : String(err));
+    }
+  }
+
   const durumEtiketi = !durum
     ? "API kapalı"
     : durum.onay_bekleyen
@@ -524,6 +535,16 @@ export default function Anasayfa() {
                   <>▶ Başlat</>
                 )}
               </button>
+              {durum?.calisiyor && (
+                <button
+                  type="button"
+                  onClick={iptalEt}
+                  className={styles.durdurButonu}
+                  disabled={durum?.iptal_istendi ?? false}
+                >
+                  {durum?.iptal_istendi ? "Durduruluyor…" : "✕ İptal"}
+                </button>
+              )}
             </div>
             {gonderimHatasi && (
               <p className={styles.hata} role="alert">

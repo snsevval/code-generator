@@ -87,6 +87,10 @@ _ARAC_PARAMETRELERI = {
 }
 
 
+class IptalEdildi(RuntimeError):
+    """Kullanıcı görevi iptal etti (işbirlikçi durdurma noktasında yakalanır)."""
+
+
 class OrkestrasyonHatasi(RuntimeError):
     """Döngü ilerleyemedi (tool turu sınırı, işaretsiz doğrulama çıktısı vb.)."""
 
@@ -151,6 +155,10 @@ class Orkestrator:
         # Son ajan_calistir çağrısındaki başarılı write_file/edit_file sayısı
         # (devam modunda aşama atlanırsa ajan_calistir hiç koşmaz — varsayılan şart)
         self.son_yazma_sayisi = 0
+        # İşbirlikçi iptal: dışarıdan (api.py) atanan, True dönerse görevi temiz
+        # durduran callable. Aşama başlarında ve tool turlarında kontrol edilir —
+        # kullanıcı yanlış görevi iptal edip yeni projeye geçebilsin.
+        self.iptal_kontrol: object | None = None
         # git=True: otomatik kur (FCC_GIT=0 veya git yoksa sessizce kapalı),
         # git=False/None: kapalı, GitDeposu örneği: onu kullan
         if git is True:
@@ -189,6 +197,7 @@ class Orkestrator:
         pespese_kabuk = 0  # dosya yazmadan art arda run_shell (debelenme sinyali)
 
         for _ in range(MAX_TOOL_TURU):
+            self._iptal_mi()  # her tool turunda iptal kontrolü (uzun koşuyu da keser)
             _gecmisi_kirp(mesajlar)
             yanit = self.istemci.mesaj_gonder(
                 model=ajan.model,
@@ -316,11 +325,17 @@ class Orkestrator:
 
     # --- Aşamalar ---
 
+    def _iptal_mi(self) -> None:
+        """Kullanıcı iptal ettiyse IptalEdildi fırlatır (aksi halde no-op)."""
+        if callable(self.iptal_kontrol) and self.iptal_kontrol():
+            raise IptalEdildi("görev kullanıcı tarafından iptal edildi")
+
     def _asama(self, state: OturumState, ad: str, gorev_metni: str) -> str:
         """Aşamayı çalıştırır (daha önce bittiyse kayıtlı çıktıyı döndürür)."""
         if ad in state.tamamlanan:
             self._yaz(f"[{ad}] atlandı (önceki oturumda tamamlanmış)")
             return state.ciktilar[ad]
+        self._iptal_mi()  # aşama başında iptal kontrolü
         self._yaz(f"[{ad}] başlıyor...")
         onceki = dict(getattr(self.istemci, "kullanim", None) or {})
         cikti = self.ajan_calistir(AJANLAR[ad], gorev_metni)

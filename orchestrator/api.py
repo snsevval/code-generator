@@ -29,7 +29,7 @@ from pydantic import BaseModel
 from orchestrator.calisma_alani import gorev_klasoru_sec
 from orchestrator.fullstack_runner import fastapi_uygulamasi_bul
 from orchestrator.llm_client import VARSAYILAN_PROXY_URL
-from orchestrator.loop import Orkestrator
+from orchestrator.loop import IptalEdildi, Orkestrator
 from orchestrator.proje import ProjeOrkestratoru
 from orchestrator.playbook import gorevi_zenginlestir as playbook_zenginlestir
 from orchestrator.tasarim import gorevi_zenginlestir
@@ -107,6 +107,9 @@ class _Durum:
         # "rengi değiştir" bile fullstack olarak yeniden doğrulanır)
         self.sohbet: list[dict] = []  # {"istek": str, "basarili": bool}
         self.proje_tipi: str | None = None
+        # İptal: kullanıcı yanlış/istenmeyen görevi durdurabilsin (orkestratör
+        # işbirlikçi olarak bir sonraki aşama/tool turunda temiz durur)
+        self.iptal_istendi = False
 
 
 DURUM = _Durum()
@@ -128,6 +131,12 @@ def _gorev_kos(istek: GorevIstegi) -> None:
         runner = DockerShellRunner(ws) if istek.docker else None
         log = lambda satir: DURUM.log.append(satir)  # noqa: E731
         ork = ORKESTRATOR_FABRIKASI(ws, ToolExecutor(ws, shell_runner=runner), log)
+        # İşbirlikçi durdurma: gerçek orkestratörde iptal_kontrol var; bazı test
+        # sahteleri attribute kabul etmez → savunmacı ata (o zaman iptal edilemez)
+        try:
+            ork.iptal_kontrol = lambda: DURUM.iptal_istendi
+        except (AttributeError, TypeError):
+            pass
         DURUM.istemci = getattr(ork, "istemci", None)
 
         gorev_metni = istek.gorev
@@ -196,9 +205,13 @@ def _gorev_kos(istek: GorevIstegi) -> None:
             DURUM.sohbet.append(
                 {"istek": istek.gorev, "basarili": DURUM.sonuc["dogrulama_gecti"]}
             )
+    except IptalEdildi:
+        DURUM.hata = "Görev iptal edildi."
+        log("[iptal] görev kullanıcı tarafından durduruldu.")
     except Exception as e:  # UI'ye okunur hata taşınır
         DURUM.hata = f"{type(e).__name__}: {e}"
     finally:
+        DURUM.iptal_istendi = False
         DURUM.calisiyor = False
 
 
@@ -278,6 +291,17 @@ def gorev_baslat(istek: GorevIstegi):
     return {"baslatildi": True, "gorev": istek.gorev}
 
 
+@app.post("/api/iptal")
+def gorev_iptal():
+    """Çalışan görevi iptal eder (işbirlikçi: orkestratör bir sonraki aşama/tool
+    turunda temiz durur). Yanlış görev gönderildiğinde yeni projeye geçebilmek için."""
+    if not DURUM.calisiyor:
+        return {"iptal": False, "mesaj": "çalışan görev yok"}
+    DURUM.iptal_istendi = True
+    DURUM.log.append("[iptal] durdurma istendi — mevcut adım bitince duracak...")
+    return {"iptal": True}
+
+
 @app.get("/api/durum")
 def durum():
     return {
@@ -292,6 +316,7 @@ def durum():
         "onizleme_url": DURUM.onizleme_url,
         "onizleme_backend_url": DURUM.onizleme_backend_url,
         "sohbet": DURUM.sohbet,
+        "iptal_istendi": DURUM.iptal_istendi,
     }
 
 

@@ -9,7 +9,12 @@ from __future__ import annotations
 import pytest
 
 from orchestrator.agents import AJANLAR, BASARI_ISARETI, BASARISIZLIK_ISARETI
-from orchestrator.loop import MAX_DEBUG_TURU, Orkestrator, OrkestrasyonHatasi
+from orchestrator.loop import (
+    MAX_DEBUG_TURU,
+    IptalEdildi,
+    Orkestrator,
+    OrkestrasyonHatasi,
+)
 from orchestrator.state import OturumState
 
 
@@ -51,6 +56,31 @@ def orkestrator_kur(tmp_path, senaryo):
         ws, istemci=istemci, state_yolu=tmp_path / "state.json", log=False, git=False
     )
     return ork, istemci
+
+
+def test_iptal_gorevi_temiz_durdurur(tmp_path):
+    # Kullanıcı iptal edince (iptal_kontrol True) görev IptalEdildi ile durur —
+    # sonsuz/yanlış görevde takılıp kalmadan yeni projeye geçilebilsin
+    senaryo = [metin_cevap("plan")] * 10  # planner'a kadar gelmemeli bile
+    ork, _ = orkestrator_kur(tmp_path, senaryo)
+    ork.iptal_kontrol = lambda: True  # anında iptal
+    with pytest.raises(IptalEdildi):
+        ork.gorev_calistir("yanlış görev")
+
+
+def test_iptal_yoksa_normal_calisir(tmp_path):
+    # iptal_kontrol False dönerse hiçbir etkisi olmamalı (normal akış)
+    senaryo = (
+        [metin_cevap("plan")]
+        + [tool_cevap("write_file", {"path": "a.py", "content": "x=1"}, "c1"),
+           metin_cevap("yazdım")]
+        + validator_cevaplari(BASARI_ISARETI)
+        + [metin_cevap("rapor")]
+    )
+    ork, _ = orkestrator_kur(tmp_path, senaryo)
+    ork.iptal_kontrol = lambda: False
+    state = ork.gorev_calistir("normal görev")
+    assert state.ciktilar["dogrulama_gecti"] == "True"
 
 
 # --- Ajan tool döngüsü ---

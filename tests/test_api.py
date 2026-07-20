@@ -104,6 +104,43 @@ def test_durum_kullanim_alani_icerir(istemci):
     assert "kullanim" in veri  # koşu yokken None olabilir
 
 
+def test_iptal_calisan_gorev_yokken(istemci):
+    # Çalışan görev yokken iptal no-op döner (hata değil)
+    veri = istemci.post("/api/iptal").json()
+    assert veri["iptal"] is False
+
+
+def test_iptal_calisan_gorevi_durdurur(istemci, monkeypatch):
+    # Uzun süren görev + iptal: orkestratör iptal_kontrol'ü görüp durur, calisiyor False olur
+    import threading
+
+    baslasin = threading.Event()
+
+    class YavasOrk(SahteOrkestrator):
+        def __init__(self, log):
+            super().__init__(log)
+            self.iptal_kontrol = None
+
+        def gorev_calistir(self, gorev, devam=False):
+            baslasin.set()
+            # iptal gelene kadar bekle, sonra IptalEdildi fırlat (orkestratör davranışı)
+            for _ in range(200):
+                if callable(self.iptal_kontrol) and self.iptal_kontrol():
+                    from orchestrator.loop import IptalEdildi
+
+                    raise IptalEdildi("iptal")
+                time.sleep(0.02)
+            return super().gorev_calistir(gorev, devam)
+
+    monkeypatch.setattr(api, "ORKESTRATOR_FABRIKASI", lambda ws, ex, log: YavasOrk(log))
+    istemci.post("/api/gorev", json={"gorev": "uzun görev"})
+    assert baslasin.wait(timeout=5)
+    assert istemci.post("/api/iptal").json()["iptal"] is True
+    veri = _bekle_bitsin(istemci)
+    assert veri["calisiyor"] is False
+    assert veri["hata"] == "Görev iptal edildi."
+
+
 def test_tasarim_bayragi_gorevi_zenginlestirir(istemci, monkeypatch):
     alinan = {}
 
