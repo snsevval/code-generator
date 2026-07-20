@@ -55,12 +55,17 @@ Full-stack (TEK-ORIGIN) — ŞU DOSYALARI YAZ (sistem çalıştırıp doğrular;
        def index():
            return FileResponse("index.html")
    Frontend ve API aynı origin'de olacağı için CORS ve sabit port GEREKMEZ.
+   POST/PUT GÖVDESİ için MUTLAKA Pydantic BaseModel kullan (def uc(istek: Model)).
+   Düz parametre (def uc(x: float)) FastAPI'de QUERY olur; JSON gövde gönderilince 422 verir.
 2. test_backend.py: pytest + fastapi.testclient.TestClient ile TÜM uçları test et.
    Testler İZOLE: autouse fixture ile her testten önce 'import backend; backend.<liste>.clear();
    backend.<sayaç> = ...' ile sıfırla.
 3. index.html: tek dosya, CSS gömülü. fetch'te GÖRELİ yol kullan — fetch('/todos') (sabit
    host/port YAZMA, http://localhost:XXXX YOK). Sayfa yüklenince GET ile listeyi çek ve DOM'a
    BAS; ekle POST, sil DELETE. Frontend backend'in özelliğini YANSITMALI (sayaç değil, backend neyse o).
+   JS SIRALAMA: bir değişkeni/diziyi KULLANMADAN ÖNCE tanımla; ilk boyutlandırma/init
+   çağrılarını (canvas resize, initStars, draw) dosyanın SONUNA koy — üstte tanımsız
+   const'a erişmek 'Cannot access before initialization' hatası verip tüm script'i çökertir.
 ZORUNLU: Sistem backend'i BOŞ bir portta başlatır (index.html'i de o servis eder), sayfayı açıp
 frontend'in backend'e GERÇEKTEN fetch atıp veri çektiğini AĞ düzeyinde kontrol eder — backend'e
 istek atmayan bağımsız/sahte sayfa GEÇMEZ. Sen sadece 3 dosyayı yaz.
