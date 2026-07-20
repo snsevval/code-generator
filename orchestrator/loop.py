@@ -21,7 +21,7 @@ from orchestrator.agents import (
     BASARISIZLIK_ISARETI,
     AjanTanimi,
 )
-from orchestrator.fullstack_runner import FullstackRunner
+from orchestrator.fullstack_runner import FullstackRunner, fastapi_uygulamasi_bul
 from orchestrator.git_deposu import GitDeposu
 from orchestrator.llm_client import LLMIstemcisi
 from orchestrator.state import OturumState
@@ -426,22 +426,53 @@ class Orkestrator:
         onceden_tamam = "codegen" in state.tamamlanan
         self._asama(state, "codegen", f"Görev: {gorev}\n\nUygulanacak plan:\n{plan}")
         self._codegen_yazdi = self.son_yazma_sayisi > 0
-        # Dürtü koşulu: codegen ARAÇ kullandı ama hiç dosya YAZMADI (gözlenen hata:
-        # list_files çağırıp kısa metinle durdu). Hiç araç kullanmayan saf-metin
-        # durumu zaten deterministik Runner'da yakalanır — burada dürtmüyoruz.
-        if onceden_tamam or self.son_yazma_sayisi > 0 or self.son_arac_sayisi == 0:
+        if onceden_tamam:
             return
-        self._yaz("[orkestratör] codegen hiç dosya yazmadı → dürtüyle tekrar isteniyor")
+        # İki dürtü koşulu:
+        # (a) ARAÇ kullandı ama HİÇ dosya YAZMADI (list_files çağırıp metinle durdu)
+        # (b) dosya yazdı ama ZORUNLU dosyalar eksik (ör. backend.py var, index.html yok)
+        hic_yazmadi = self.son_yazma_sayisi == 0 and self.son_arac_sayisi > 0
+        eksikler = self._eksik_zorunlu_dosyalar()
+        if not hic_yazmadi and not eksikler:
+            return
+        if hic_yazmadi:
+            uyari = (
+                "ÖNEMLİ: Önceki denemende HİÇ dosya yazmadın — bu kabul edilemez. Planı "
+                "AÇIKLAMA, UYGULA: write_file aracıyla gereken kod ve test dosyalarını "
+                "(örn. backend.py, test_backend.py) ŞİMDİ oluştur. Metin yazma, dosya yaz."
+            )
+            self._yaz("[orkestratör] codegen hiç dosya yazmadı → dürtüyle tekrar isteniyor")
+        else:
+            uyari = (
+                "ÖNEMLİ: Şu ZORUNLU dosyalar eksik: " + ", ".join(eksikler) + ". "
+                "Bunları write_file ile ŞİMDİ oluştur; mevcut dosyaları koru. Metin yazma, dosya yaz."
+            )
+            self._yaz(f"[orkestratör] eksik dosya(lar): {', '.join(eksikler)} → codegen dürtülüyor")
         state.tamamlanan.remove("codegen")
         self._asama(
             state,
             "codegen",
-            f"Görev: {gorev}\n\nUygulanacak plan:\n{plan}\n\n"
-            "ÖNEMLİ: Önceki denemende HİÇ dosya yazmadın — bu kabul edilemez. Planı "
-            "AÇIKLAMA, UYGULA: write_file aracıyla gereken kod ve test dosyalarını "
-            "(örn. backend.py, test_backend.py) ŞİMDİ oluştur. Metin yazma, dosya yaz.",
+            f"Görev: {gorev}\n\nUygulanacak plan:\n{plan}\n\n" + uyari,
         )
-        self._codegen_yazdi = self.son_yazma_sayisi > 0
+        self._codegen_yazdi = self._codegen_yazdi or self.son_yazma_sayisi > 0
+
+    def _eksik_zorunlu_dosyalar(self) -> list[str]:
+        """backend/fullstack için codegen sonrası eksik olan zorunlu dosyaları döndürür.
+
+        backend: FastAPI modülü + en az bir test_*.py. fullstack: ayrıca index.html.
+        Diğer tiplerde ([cpp]/None) zorunlu-dosya kontrolü yapılmaz (boş liste).
+        """
+        if self._dogrulama_tipi not in ("backend", "fullstack"):
+            return []
+        ws = self.executor.workspace
+        eksik: list[str] = []
+        if fastapi_uygulamasi_bul(ws) is None:
+            eksik.append("backend.py (FastAPI uygulaması)")
+        if not list(ws.glob("test_*.py")):
+            eksik.append("test_backend.py")
+        if self._dogrulama_tipi == "fullstack" and not (ws / "index.html").is_file():
+            eksik.append("index.html")
+        return eksik
 
     def _deterministik_dogrula(self) -> tuple[bool, str]:
         """Backend/full-stack tipinde doğrulamayı Runner ile deterministik yapar.
@@ -517,9 +548,18 @@ class Orkestrator:
             debug_cikti = self.ajan_calistir(
                 AJANLAR["debugger"],
                 f"Görev: {gorev}\n\nBaşarısız doğrulama çıktısı:\n{dogrulama}\n\n"
-                "Sorunu bul ve düzelt.",
+                "Sorunu bul ve düzelt. Hatada adı geçen dosyayı read_file ile AÇ, kök "
+                "nedeni edit_file/write_file ile DÜZELT — sadece bakıp bırakma, MUTLAKA "
+                "bir dosya değiştir.",
             )
             state.ciktilar[f"debugger_{state.debug_turu}"] = debug_cikti
+            # No-op freni: debugger HİÇBİR dosyayı değiştirmediyse aynı testi tekrar
+            # koşmak birebir aynı sonucu verir (canlıda 3 tur boşa harcandı) → erken bırak
+            if self.son_yazma_sayisi == 0:
+                self._yaz(
+                    "[orkestratör] debugger düzeltme yapmadı (hiç dosya değişmedi) → bırakılıyor"
+                )
+                break
             # Doğrulamayı yeniden koş (önceki model-validator sonucunu geçersiz kıl;
             # Runner yolunda 'validator' zaten tamamlanan'da olmaz — no-op)
             if "validator" in state.tamamlanan:
@@ -527,11 +567,14 @@ class Orkestrator:
             gecti, dogrulama = self._dogrula(state, gorev, plan)
 
         state.ciktilar["dogrulama_gecti"] = str(gecti)
-        self._asama(
-            state,
-            "reviewer",
-            f"Görev: {gorev}\n\nÜretilen işi incele ve raporla.",
-        )
+        # Reviewer yalnızca BAŞARILI koşuda koşar — başarısızda Runner'ın hata mesajı
+        # zaten net; reviewer'ı çalıştırmak boşa token yakar (commit yine de yapılır).
+        if gecti:
+            self._asama(
+                state,
+                "reviewer",
+                f"Görev: {gorev}\n\nÜretilen işi incele ve raporla.",
+            )
         state.kaydet(self.state_yolu)
 
         # Workspace değişikliklerini tarihçeye yaz (izlenebilirlik + geri alma)

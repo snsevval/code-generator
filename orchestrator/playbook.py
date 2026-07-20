@@ -60,6 +60,8 @@ Full-stack (TEK-ORIGIN) — ŞU DOSYALARI YAZ (sistem çalıştırıp doğrular;
 2. test_backend.py: pytest + fastapi.testclient.TestClient ile TÜM uçları test et.
    Testler İZOLE: autouse fixture ile her testten önce 'import backend; backend.<liste>.clear();
    backend.<sayaç> = ...' ile sıfırla.
+   FLOAT: sayısal/ondalıklı sonuçları testte '==' ile KARŞILAŞTIRMA — pytest.approx()
+   veya abs(a-b) < 1e-9 kullan; kayan nokta (ör. -40+273.15) tam eşitlikte kırılır.
 3. index.html: tek dosya, CSS gömülü. fetch'te GÖRELİ yol kullan — fetch('/todos') (sabit
    host/port YAZMA, http://localhost:XXXX YOK). Sayfa yüklenince GET ile listeyi çek ve DOM'a
    BAS; ekle POST, sil DELETE. Frontend backend'in özelliğini YANSITMALI (sayaç değil, backend neyse o).
@@ -77,6 +79,8 @@ Backend — ŞU DOSYALARI YAZ (sistem çalıştırıp doğrular; sen pytest/sunu
    (allow_origins=["*"]).
 2. test_backend.py: pytest + TestClient ile TÜM uçları test et. Testler İZOLE: autouse fixture
    ile her testten önce 'import backend; backend.<liste>.clear(); backend.<sayaç> = ...' ile sıfırla.
+   FLOAT: sayısal/ondalıklı sonuçları testte '==' ile KARŞILAŞTIRMA — pytest.approx()
+   veya abs(a-b) < 1e-9 kullan; kayan nokta (ör. -40+273.15) tam eşitlikte kırılır.
 Sistem: pytest'i izole (PYTEST_DISABLE_PLUGIN_AUTOLOAD) koşar ve uvicorn'u başlatıp uçları
 doğrular. Sen sadece 2 dosyayı yaz, kısa özetle bitir.
 """,

@@ -437,7 +437,9 @@ def test_basarisiz_dogrulama_debugger_tetikler(tmp_path):
     senaryo = (
         [metin_cevap("plan"), metin_cevap("kod yazıldı")]
         + validator_cevaplari(f"hata var\n{BASARISIZLIK_ISARETI}")  # validator (1.)
-        + [metin_cevap("hatayı düzelttim")]  # debugger
+        # debugger GERÇEKTEN dosya yazar (no-op freni tetiklenmesin, gerçek düzeltme)
+        + [tool_cevap("write_file", {"path": "fix.py", "content": "x=1"}, "d1"),
+           metin_cevap("hatayı düzelttim")]
         + validator_cevaplari(f"şimdi geçti\n{BASARI_ISARETI}")  # validator (2.)
         + [metin_cevap("rapor")]  # reviewer
     )
@@ -451,19 +453,65 @@ def test_basarisiz_dogrulama_debugger_tetikler(tmp_path):
 
 def test_debug_turu_siniri(tmp_path):
     senaryo = [metin_cevap("plan"), metin_cevap("kod")]
-    # validator hep başarısız + araya debugger: MAX tur boyunca
+    # validator hep başarısız + araya debugger: MAX tur boyunca. Debugger HER turda bir
+    # dosya yazar ki no-op freni tetiklenmesin (gerçek tükenme senaryosu test edilsin).
     senaryo += validator_cevaplari(BASARISIZLIK_ISARETI)
     for _ in range(MAX_DEBUG_TURU):
-        senaryo.append(metin_cevap("düzeltme denemesi"))  # debugger
+        senaryo.append(tool_cevap("write_file", {"path": "fix.py", "content": "x=1"}, "d"))
+        senaryo.append(metin_cevap("düzeltme denemesi"))  # debugger dosya yazdı
         senaryo += validator_cevaplari(BASARISIZLIK_ISARETI)  # validator yine kötü
-    senaryo.append(metin_cevap("rapor"))  # reviewer yine de koşar
 
     ork, _ = orkestrator_kur(tmp_path, senaryo)
     state = ork.gorev_calistir("inatçı görev")
 
     assert state.debug_turu == MAX_DEBUG_TURU
     assert state.ciktilar["dogrulama_gecti"] == "False"
-    assert "reviewer" in state.ciktilar
+    assert "reviewer" not in state.ciktilar  # başarısız koşuda reviewer atlanır
+
+
+def test_debugger_noop_erken_cikis(tmp_path):
+    # Debugger hiçbir dosyayı değiştirmezse aynı testi tekrar koşmak anlamsız →
+    # 3 tur harcamadan 1 turda erken çıkılır (canlıda 3 boş tur gözlendi)
+    senaryo = (
+        [metin_cevap("plan")]
+        + [tool_cevap("write_file", {"path": "a.py", "content": "x=1"}, "c1"),
+           metin_cevap("yazdım")]
+        + validator_cevaplari(BASARISIZLIK_ISARETI)  # doğrulama başarısız
+        + [metin_cevap("sadece baktım, düzeltmedim")]  # debugger: HİÇ dosya yazmaz
+    )
+    ork, _ = orkestrator_kur(tmp_path, senaryo)
+    state = ork.gorev_calistir("görev")
+
+    assert state.debug_turu == 1  # 3 değil — no-op'ta erken çıktı
+    assert state.ciktilar["dogrulama_gecti"] == "False"
+    assert "reviewer" not in state.ciktilar  # başarısızda reviewer atlandı
+
+
+def test_eksik_dosya_durtusu_fullstack(tmp_path):
+    # Fullstack'te codegen sadece backend.py yazar; index.html + test eksik →
+    # doğrulamaya gitmeden isim isim dürtülür (canlıda 'sadece backend' koşusu gözlendi)
+    senaryo = [
+        tool_cevap("write_file",
+                   {"path": "backend.py", "content": "from fastapi import FastAPI\napp=FastAPI()"}, "c1"),
+        metin_cevap("backend yazdım"),
+        # dürtü sonrası eksikleri yazar
+        tool_cevap("write_file", {"path": "index.html", "content": "<html></html>"}, "c2"),
+        tool_cevap("write_file", {"path": "test_backend.py", "content": "def test_x():\n    pass"}, "c3"),
+        metin_cevap("eksikleri yazdım"),
+    ]
+    ork, istemci = orkestrator_kur(tmp_path, senaryo)
+    ork._dogrulama_tipi = "fullstack"
+    state = OturumState(gorev="g")
+    ork._codegen_kos(state, "g", "plan")
+
+    # Dürtü tetiklendi: bir istekte "eksik" geçmeli + eksik dosyalar gerçekten yazıldı
+    dursozler = [
+        i["messages"][0]["content"] for i in istemci.istekler
+        if isinstance(i["messages"][0]["content"], str)
+    ]
+    assert any("eksik" in s.lower() for s in dursozler)
+    assert (ork.executor.workspace / "index.html").is_file()
+    assert (ork.executor.workspace / "test_backend.py").is_file()
 
 
 def test_isaretsiz_validator_netlestirmeyle_cozulur(tmp_path):

@@ -58,6 +58,7 @@ def test_fullstack_tarifi_kritik_bilgiyi_icerir():
     assert "DOM" in metin  # veriyi ekrana bas (entegrasyon)
     assert "BaseModel" in metin  # POST gövdesi Pydantic (query/422 tuzağı önlenir)
     assert "SIRALAMA" in metin  # JS TDZ tuzağı (const'a erken erişim) uyarısı
+    assert "approx" in metin  # float == tuzağı (canlıda -40+273.15 testi kırdı)
     # Tek-origin: sabit portlar ve CORS tariften çıktı
     assert str(BACKEND_PORT) not in metin
     assert "CORSMiddleware" not in metin
@@ -66,6 +67,13 @@ def test_fullstack_tarifi_kritik_bilgiyi_icerir():
     assert "check_page" not in metin
     # De-prime: halüsinasyon tetikleyicisini adıyla anmıyoruz
     assert "docker" not in metin.lower()
+
+
+def test_backend_tarifi_float_kurali_icerir():
+    # Canlıda model backend testinde float == kullanıp kırdı (-40+273.15)
+    metin, ad = gorevi_zenginlestir("FastAPI ile sıcaklık çeviren API yaz")
+    assert ad == "backend"
+    assert "approx" in metin  # float tam-eşitlik tuzağı uyarısı
 
 
 def test_vite_tarifi_bilinen_tuzaklari_kapatir():
