@@ -1,8 +1,15 @@
 # Agentic Kod Üretim Sistemi — Proje Raporu
 
-> Faz 9 (Doğal Dil Katmanı) · 16.07.2026 · 171 test geçiyor · 6 ajan · 11 araç · 13 koruma
+> Faz 10 (Deterministik Doğrulama) · 20.07.2026 · 238 test geçiyor · 6 ajan · 11 araç · 20+ koruma
 > Görsel/interaktif sürüm: bu rapor Artifact olarak da yayınlandı (mermaid diyagramları render'lı).
 > Güncel fotoğraf: [DURUM.md](DURUM.md) · Faz geçmişi: [task_plan.md](task_plan.md)
+
+!!! note "Faz 10 güncellemesi"
+    Bu rapor Faz 9 mimarisini anlatır ve temel felsefe aynen geçerlidir. Faz 10'da
+    eklenen **deterministik Runner** (doğrulamayı modelden alıp orkestratöre veren
+    backend/full-stack/C++ katmanı), **playbook tarifi**, **file-only ajanlar**,
+    **takip modu** ve genişleyen güvenlik/güvenilirlik korumaları için güncel özet:
+    **[Anlık Durum → DURUM.md](DURUM.md)**.
 
 ---
 

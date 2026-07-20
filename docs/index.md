@@ -8,11 +8,11 @@
 Doğal dille verilen bir görevi alıp kodu **kendi yazan, test eden, hatasını düzelten ve çalıştırıp doğrulayan** çok-ajanlı bir yapay zekâ üretim hattı. Sohbet botu kod _metni_ verir; bu sistem çalışan, doğrulanmış bir iş _teslim eder_.
 
 <div class="stats">
-  <span><b>Faz 9</b> · Doğal Dil Katmanı</span>
-  <span><b>171</b> test geçiyor</span>
+  <span><b>Faz 10</b> · Deterministik Doğrulama</span>
+  <span><b>238</b> test geçiyor</span>
   <span><b>6</b> ajan</span>
   <span><b>11</b> araç</span>
-  <span><b>13</b> koruma</span>
+  <span><b>20+</b> koruma</span>
 </div>
 </div>
 
@@ -60,7 +60,12 @@ flowchart LR
     K([Kullanıcı]) --> API[API :8090]
     API --> ZEN[tasarım + playbook] --> ORK[Orkestratör]
     ORK --> AJ[6 Ajan] --> AR[11 Araç]
+    ORK --> RUN[Deterministik Runner<br/>derle/pytest/tarayıcı]
     AJ --> PX[Proxy :8082] --> M1[NIM] & M2[Gemini] & M3[Groq]
 ```
+
+Backend, full-stack ve C++ görevlerinde doğrulama **modelden alınıp orkestratöre
+verilir**: test/sunucu/derleyici koreografisini sistem yapar (deterministik Runner),
+model yalnızca dosyaları yazar. Bu, "sahte başarı" halüsinasyonunu imkânsız kılar.
 
 Ayrıntılı use-case, katmanlı mimari, ajan döngüsü, sıra ve durum diyagramları için **[Proje Raporu](PROJE_RAPORU.md)** sayfasına bak.
