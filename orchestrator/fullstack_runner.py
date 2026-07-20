@@ -313,6 +313,15 @@ class FullstackRunner:
                 sayfa.on("response", _yanit)
                 sayfa.goto(url, wait_until="networkidle", timeout=SAYFA_ZAMAN_ASIMI_MS)
                 sayfa.wait_for_timeout(FETCH_BEKLEME_MS)
+                # Açılışta fetch yoksa sayfa buton-tetiklemeli olabilir (örn. "Hesapla"):
+                # ilk butona tıklayıp bir şans daha ver (canlıda yörünge uygulaması
+                # yanlışlıkla 'bağlantısız' sayıldı — form doldurulup basılınca fetch atıyordu)
+                if not api_yanitlari:
+                    try:
+                        sayfa.locator("button, input[type=submit]").first.click(timeout=2000)
+                        sayfa.wait_for_timeout(FETCH_BEKLEME_MS + 500)
+                    except Exception:
+                        pass  # buton yoksa/tıklanamıyorsa eski karar geçerli
                 tarayici.close()
         except Exception as e:  # tarayıcı/sayfa hatası
             return DogrulamaRaporu(False, f"BAŞARISIZ: sayfa açılamadı/doğrulanamadı: {e}")
@@ -322,8 +331,9 @@ class FullstackRunner:
             return DogrulamaRaporu(
                 False,
                 "BAŞARISIZ: frontend backend'e (aynı origin) HİÇ fetch/XHR isteği atmadı — "
-                "arayüz backend'e bağlı değil (bağımsız sayfa). index.html sayfa yüklenince "
-                "GÖRELİ yolla (fetch('/todos')) backend'den veri çekip DOM'a basmalı.",
+                "sayfa açılışında da, ilk butona tıklanınca da. Arayüz backend'e bağlı değil. "
+                "index.html GÖRELİ yolla (örn. fetch('/todos')) backend'den veri çekmeli "
+                "(açılışta ya da buton tıklamasıyla) ve sonucu DOM'a basmalı.",
             )
         if not basarili:
             durumlar = ", ".join(f"{s}" for _, s in api_yanitlari[:5])

@@ -340,6 +340,53 @@ def test_backend_debugger_yalniz_dosya_araclari(tmp_path):
            "yeniden" in istemci.istekler[0]["system"]  # debugger notu eklendi
 
 
+def test_takip_codegen_yazmadiysa_basarili_sayilmaz(tmp_path):
+    # Canlıda: takipte codegen hiçbir dosyayı değiştirmedi ama eski proje geçtiği
+    # için 'BAŞARILI' raporlandı (login isteği yutuldu). Kural: takipte değişiklik
+    # yoksa doğrulamaya gitmeden BAŞARISIZ sayılır → Debugger'a net gerekçe düşer.
+    senaryo = (
+        [metin_cevap("plan")]
+        + [tool_cevap("list_files", {}, "c1"), metin_cevap("baktım")]  # codegen: araç var, yazma yok
+        + [tool_cevap("list_files", {}, "c2"), metin_cevap("yine baktım")]  # dürtü sonrası da yazmadı
+        + [tool_cevap("write_file", {"path": "index.html", "content": "<html>login</html>"}, "d1"),
+           metin_cevap("login ekledim")]  # debugger değişikliği uygular
+        + validator_cevaplari(BASARI_ISARETI)  # yeniden doğrulama geçer
+        + [metin_cevap("rapor")]
+    )
+    ork, istemci = orkestrator_kur(tmp_path, senaryo)
+    ork._takip = True
+    state = ork.gorev_calistir("giriş sayfası ekle")
+
+    assert state.debug_turu == 1  # sahte başarı yerine debugger devreye girdi
+    assert state.ciktilar["dogrulama_gecti"] == "True"
+    assert (ork.executor.workspace / "index.html").is_file()  # değişiklik gerçekten yapıldı
+    # Debugger'a giden görev net gerekçeyi içermeli
+    debugger_gorevi = next(
+        i["messages"][0]["content"] for i in istemci.istekler
+        if isinstance(i["messages"][0]["content"], str)
+        and "UYGULANMADI" in i["messages"][0]["content"]
+    )
+    assert "giriş sayfası ekle" in debugger_gorevi
+
+
+def test_takip_codegen_yazdiysa_normal_akis(tmp_path):
+    # Takipte codegen değişiklik yaptıysa kural devreye girmez, normal doğrulama koşar
+    senaryo = (
+        [metin_cevap("plan")]
+        + [tool_cevap("edit_file", {"path": "a.txt", "eski_metin": "x", "yeni_metin": "y"}, "c1"),
+           metin_cevap("düzenledim")]
+        + validator_cevaplari(BASARI_ISARETI)
+        + [metin_cevap("rapor")]
+    )
+    ork, istemci = orkestrator_kur(tmp_path, senaryo)
+    (ork.executor.workspace / "a.txt").write_text("x", encoding="utf-8")
+    ork._takip = True
+    state = ork.gorev_calistir("a'yı y yap")
+
+    assert state.debug_turu == 0
+    assert state.ciktilar["dogrulama_gecti"] == "True"
+
+
 def test_backend_disi_codegen_tam_arac_seti(tmp_path):
     # frontend/None → codegen tam araç setini (check_page, start_server) korur
     senaryo = [

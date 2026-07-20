@@ -183,6 +183,29 @@ def test_fullstack_bagli_frontend_gecer(tmp_path):
     assert "veri çekti" in rapor.detay
 
 
+# Buton-tetiklemeli: açılışta fetch YOK; "Hesapla" butonuna basılınca fetch atar
+# (canlıda yörünge uygulaması bu desende yanlış 'bağlantısız' sayılmıştı)
+FRONTEND_BUTONLU = (
+    "<!DOCTYPE html><html><head><meta charset='utf-8'><title>B</title></head><body>"
+    "<button id='hesapla'>Hesapla</button><div id='sonuc'></div><script>"
+    "document.getElementById('hesapla').addEventListener('click', function(){"
+    "fetch('/items').then(r=>r.json())"
+    ".then(d=>{document.getElementById('sonuc').textContent=JSON.stringify(d);})"
+    ".catch(e=>console.error(e));});"
+    "</script></body></html>"
+)
+
+
+@pytest.mark.skipif(not _TARAYICI, reason="playwright chromium yok")
+def test_fullstack_buton_tetiklemeli_fetch_gecer(tmp_path):
+    # Açılışta istek atmayan ama butonla atan sayfa: Runner butona tıklayıp doğrulamalı
+    ws = _ws(tmp_path)
+    (ws / "backend.py").write_text(BACKEND_ITEMS, encoding="utf-8")
+    (ws / "index.html").write_text(FRONTEND_BUTONLU, encoding="utf-8")
+    rapor = FullstackRunner(ws).fullstack_dogrula()
+    assert rapor.gecti is True, rapor.detay
+
+
 @pytest.mark.skipif(not _TARAYICI, reason="playwright chromium yok")
 def test_fullstack_kopuk_frontend_basarisiz(tmp_path):
     ws = _ws(tmp_path)

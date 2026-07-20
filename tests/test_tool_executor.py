@@ -269,6 +269,33 @@ def test_shell_ortam_kurcalama_reddedilir(executor, komut):
     assert "KODDA" in sonuc.cikti
 
 
+@pytest.mark.parametrize(
+    "komut",
+    [
+        "winget install LLVM.LLVM -e --accept-source-agreements",
+        "winget install --id=MSYS2.MSYS2",
+        "choco install mingw",
+        "scoop install gcc",
+        "pacman -Sy mingw-w64-x86_64-toolchain --noconfirm",
+        "apt-get install g++",
+        "npm install -g typescript",
+        "brew install gcc",
+    ],
+)
+def test_shell_paket_kurulumu_reddedilir(executor, komut):
+    # Canlıda: derleyici bulamayan ajan winget ile LLVM/MSYS2 kurmaya kalktı (izinsiz
+    # sınır aşımı). Sistem yazılımı kurulumu mekanik reddedilir; kullanıcıya bırakılır.
+    sonuc = executor.run_shell(komut)
+    assert not sonuc.ok
+    assert "KURMA yasak" in sonuc.cikti or "kuramazsın" in sonuc.cikti
+
+
+def test_shell_derleme_komutu_engellenmez(executor):
+    # Guard yalnız KURULUMU engeller; derleme/çalıştırma komutları serbest kalmalı
+    sonuc = executor.run_shell(f'{PYTHON} -c "print(\'g++ main.cpp -o main.exe gibi\')"')
+    assert sonuc.ok
+
+
 def test_shell_pytest_normal_calisir(executor):
     # Guard normal pytest'i engellememeli (yalnız kurcalama kalıplarını)
     sonuc = executor.run_shell(f'{PYTHON} -c "print(\'pytest -q gibi\')"')

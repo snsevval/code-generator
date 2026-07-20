@@ -132,9 +132,18 @@ class Orkestrator:
         # validator yerine deterministik FullstackRunner ile yapılır (istikrarsızlık
         # + sahte-BASARILI'yı öldürür). None ise klasik model-doğrulama akışı.
         self._dogrulama_tipi = dogrulama_tipi
+        # Takip modu (aynı proje üzerinde değişiklik isteği): api.py atar. Takipte
+        # eski proje zaten doğrulamadan geçtiği için, codegen HİÇBİR dosyayı
+        # değiştirmeden "başarılı" raporlanabiliyordu (canlıda login isteği yutuldu).
+        self._takip = False
+        # Codegen koşusunda (dürtü dahil) en az bir dosya yazıldı/düzenlendi mi
+        self._codegen_yazdi = False
         # Son ajan_calistir çağrısında gerçekten yürütülen araç sayısı
         # (kanıt şartı: doğrulama kararları araçsız kabul edilmez)
         self.son_arac_sayisi = 0
+        # Son ajan_calistir çağrısındaki başarılı write_file/edit_file sayısı
+        # (devam modunda aşama atlanırsa ajan_calistir hiç koşmaz — varsayılan şart)
+        self.son_yazma_sayisi = 0
         # git=True: otomatik kur (FCC_GIT=0 veya git yoksa sessizce kapalı),
         # git=False/None: kapalı, GitDeposu örneği: onu kullan
         if git is True:
@@ -391,6 +400,7 @@ class Orkestrator:
         """
         onceden_tamam = "codegen" in state.tamamlanan
         self._asama(state, "codegen", f"Görev: {gorev}\n\nUygulanacak plan:\n{plan}")
+        self._codegen_yazdi = self.son_yazma_sayisi > 0
         # Dürtü koşulu: codegen ARAÇ kullandı ama hiç dosya YAZMADI (gözlenen hata:
         # list_files çağırıp kısa metinle durdu). Hiç araç kullanmayan saf-metin
         # durumu zaten deterministik Runner'da yakalanır — burada dürtmüyoruz.
@@ -406,6 +416,7 @@ class Orkestrator:
             "AÇIKLAMA, UYGULA: write_file aracıyla gereken kod ve test dosyalarını "
             "(örn. backend.py, test_backend.py) ŞİMDİ oluştur. Metin yazma, dosya yaz.",
         )
+        self._codegen_yazdi = self.son_yazma_sayisi > 0
 
     def _deterministik_dogrula(self) -> tuple[bool, str]:
         """Backend/full-stack tipinde doğrulamayı Runner ile deterministik yapar.
@@ -456,7 +467,18 @@ class Orkestrator:
 
         plan = self._asama(state, "planner", f"Görev: {gorev}\n\nBu görev için plan yap.")
         self._codegen_kos(state, gorev, plan)
-        gecti, dogrulama = self._dogrula(state, gorev, plan)
+        if self._takip and not self._codegen_yazdi:
+            # Takipte sahte-başarı kapanı: eski proje zaten doğrulamadan geçer; codegen
+            # hiçbir dosyayı değiştirmediyse "istek uygulandı" DENEMEZ. Net gerekçeyle
+            # başarısız say → Debugger değişikliği kendisi uygular, sistem yeniden doğrular.
+            self._yaz("[orkestratör] takip isteği uygulanmadı (hiç dosya değişmedi) → debugger")
+            gecti, dogrulama = False, (
+                "BAŞARISIZ: takip isteği UYGULANMADI — codegen hiçbir dosyayı "
+                "değiştirmedi. Kullanıcının istediği değişiklik şu: " + gorev[:500] + "\n"
+                "İlgili dosyaları oku ve isteği edit_file/write_file ile GERÇEKTEN uygula."
+            )
+        else:
+            gecti, dogrulama = self._dogrula(state, gorev, plan)
 
         # Başarısızsa debugger ↔ doğrulama döngüsü (doğrulama: model ya da Runner)
         while not gecti:

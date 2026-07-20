@@ -175,6 +175,8 @@ def _gorev_kos(istek: GorevIstegi) -> None:
             # "backend" tipinde doğrulama deterministik Runner'a gider (model
             # validator devre dışı) — sahte-BASARILI ve validator debelenmesini önler
             ork._dogrulama_tipi = playbook_adi
+            # Takipte codegen hiçbir dosyayı değiştirmezse görev başarılı SAYILMAZ
+            ork._takip = istek.takip
             state = ork.gorev_calistir(gorev_metni, devam=istek.devam)
             DURUM.sonuc = {
                 "proje": False,

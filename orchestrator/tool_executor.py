@@ -45,6 +45,17 @@ _ORTAM_KURCALAMA = re.compile(
     re.IGNORECASE,
 )
 
+# Sistem paketi/yazılım kurulumu YASAK: ajan kullanıcının makinesine izinsiz yazılım
+# kuramaz (canlıda C++ derleyicisi bulamayan ajan winget ile LLVM/MSYS2 kurmaya
+# kalktı — kabul edilemez sınır aşımı). Derleyici gibi eksik araçları KULLANICI kurar.
+_PAKET_KURULUMU = re.compile(
+    r"\b(winget|choco|chocolatey|scoop|apt|apt-get|brew|npm|yarn|pnpm|"
+    r"cargo|gem|dotnet|conda|vcpkg)\b[^\n|&;]*\b(install|add)\b|"
+    r"\bpacman\b[^\n|&;]*\s-S|\bmsiexec\b|"
+    r"\bInstall-(Package|Module)\b|\bStart-Process\b.*\.(msi|exe)\b",
+    re.IGNORECASE,
+)
+
 # list_files'ın atladığı klasörler (üretilen/araç çıktısı içerikler)
 GIZLENEN_KLASORLER = {
     ".git",
@@ -665,6 +676,15 @@ class ToolExecutor:
                 "kapatma (-p no:) veya docker ortam değişkeni kurcalama desteklenmiyor. "
                 "Sorun çalışma ortamında DEĞİL, KODDA — hatanın assert satırını oku ve "
                 "kodu düzelt (testi/ortamı değil).",
+            )
+        if _PAKET_KURULUMU.search(command):
+            return ToolSonucu(
+                False,
+                "HATA: sistem yazılımı/paket KURMA yasak (winget/choco/scoop/pacman/apt/"
+                "npm install vb.). Kullanıcının makinesine izinsiz yazılım kuramazsın. "
+                "Bir araç (örn. C++ derleyicisi g++) eksikse ONU KURMAYA ÇALIŞMA, ARAMA: "
+                "kodu ve dosyaları yaz, derleme/çalıştırma komutunu README'ye yaz; eksik "
+                "aracın kurulumu kullanıcının sorumluluğundadır.",
             )
         zaman_asimi = timeout if timeout and timeout > 0 else VARSAYILAN_ZAMAN_ASIMI_SN
         try:
