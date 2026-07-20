@@ -188,6 +188,24 @@ def test_workspace_disi_dosya_olusmadi(tmp_path):
     assert not (tmp_path.parent / "kacak.txt").exists()
 
 
+@pytest.mark.parametrize(
+    "bozuk_path",
+    [
+        "backend.py>\n<parameter=content>",  # canlıda görülen: araç etiketi path'e sızdı
+        "backend.py\n",
+        "dosya<parameter>.py",
+        'a"b.py',
+        "x|y.py",
+    ],
+)
+def test_write_file_gecersiz_karakterli_path_cokmez(executor, bozuk_path):
+    # Model araç çağrısı sözdizimini path'e sızdırınca (OSError Errno 22) TÜM görev
+    # çöküyordu; artık dostça hata dönüp model tekrar denesin — istisna fırlamamalı
+    sonuc = executor.write_file(bozuk_path, "içerik")
+    assert not sonuc.ok
+    assert "HATA" in sonuc.cikti
+
+
 # --- run_shell ---
 
 

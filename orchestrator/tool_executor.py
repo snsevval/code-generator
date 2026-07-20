@@ -45,6 +45,11 @@ _ORTAM_KURCALAMA = re.compile(
     re.IGNORECASE,
 )
 
+# Windows/POSIX dosya adında kullanılamayan karakterler (< > : " | ? * ve kontrol
+# karakterleri). Model araç-çağrısı etiketini path'e sızdırınca ('<parameter=...>',
+# satır sonu) bunlar OSError yerine dostça reddedilsin.
+_GECERSIZ_YOL_KARAKTERI = re.compile(r'[<>|"?*\x00-\x1f]')
+
 # Sistem paketi/yazılım kurulumu YASAK: ajan kullanıcının makinesine izinsiz yazılım
 # kuramaz (canlıda C++ derleyicisi bulamayan ajan winget ile LLVM/MSYS2 kurmaya
 # kalktı — kabul edilemez sınır aşımı). Derleyici gibi eksik araçları KULLANICI kurar.
@@ -349,10 +354,19 @@ class ToolExecutor:
         """Göreli yolu workspace içinde mutlak yola çevirir.
 
         Workspace dışına çıkan her yol (mutlak yol, ``..`` dizileri,
-        symlink üzerinden kaçış) ValueError ile reddedilir.
+        symlink üzerinden kaçış) ValueError ile reddedilir. Ayrıca dosya adında
+        kullanılamayan karakterler (satır sonu, < > | " * ?) reddedilir — model
+        bazen araç çağrısı sözdizimini (ör. '<parameter=content>') path'e sızdırıp
+        geçersiz dosya adı üretiyor; bu OSError yerine dostça hata olsun.
         """
         if not path or not path.strip():
             raise ValueError("path boş olamaz")
+        if _GECERSIZ_YOL_KARAKTERI.search(path):
+            raise ValueError(
+                "path geçersiz karakter içeriyor (satır sonu veya < > | \" * ? gibi). "
+                "Sadece temiz bir dosya adı ver, ör. 'backend.py' — araç çağrısı "
+                "etiketlerini (<parameter=...>) path'e YAZMA."
+            )
         tam = (self.workspace / path).resolve()
         if tam != self.workspace and not tam.is_relative_to(self.workspace):
             raise ValueError(f"path workspace dışına çıkıyor: {path!r}")
@@ -428,8 +442,13 @@ class ToolExecutor:
         if not yeni_dosya:
             eski = tam.read_text(encoding="utf-8", errors="replace")
 
-        tam.parent.mkdir(parents=True, exist_ok=True)
-        tam.write_text(content, encoding="utf-8", newline="\n")
+        # Güvenlik ağı: geçersiz yol _coz'da elense de, disk düzeyi bir OSError
+        # (izin, ad, alan) TÜM görevi çökertmesin — dostça hataya çevir, model tekrar dener.
+        try:
+            tam.parent.mkdir(parents=True, exist_ok=True)
+            tam.write_text(content, encoding="utf-8", newline="\n")
+        except OSError as e:
+            return ToolSonucu(False, f"HATA: dosya yazılamadı ({path!r}): {e}")
 
         diff = "".join(
             difflib.unified_diff(
