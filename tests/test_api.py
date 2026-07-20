@@ -373,6 +373,38 @@ def test_onizleme_backendi_baslar_ve_durur(tmp_path, monkeypatch):
     assert yonetici.durduruldu is True
 
 
+def test_basarisiz_ama_calisan_uygulama_onizleme_baslar(istemci, monkeypatch):
+    # Test dosyası bozuk olsa da (dogrulama_gecti False) uygulama çalışıyorsa (backend
+    # ayağa kalkıyorsa) önizleme AÇILMALI — çalışan uygulamayı görmek engellenmemeli
+    from orchestrator import sunucu
+
+    monkeypatch.setattr(sunucu, "SunucuYoneticisi", _SahteSunucuYoneticisi)
+
+    class BasarisizAmaCalisanOrk:
+        def __init__(self, ws, log):
+            self._ws = ws
+            self.iptal_kontrol = None
+
+        def gorev_calistir(self, gorev, devam=False):
+            # Gerçek bir FastAPI backend yaz → uygulama çalışır (ama testler başarısız)
+            (self._ws / "backend.py").write_text(
+                "from fastapi import FastAPI\napp = FastAPI()\n", encoding="utf-8"
+            )
+            state = OturumState(gorev=gorev)
+            state.ciktilar = {"dogrulama_gecti": "False"}  # bozuk test → başarısız
+            return state
+
+    monkeypatch.setattr(
+        api, "ORKESTRATOR_FABRIKASI", lambda ws, ex, log: BasarisizAmaCalisanOrk(ws, log)
+    )
+    istemci.post("/api/gorev", json={"gorev": "FastAPI backend yaz"})
+    veri = _bekle_bitsin(istemci)
+
+    assert veri["sonuc"]["dogrulama_gecti"] is False  # görev başarısız
+    assert veri["onizleme_backend_url"] is not None  # ama önizleme yine de açık
+    assert any("uygulama çalışıyor" in s for s in veri["log"])
+
+
 def test_takip_ayni_klasorde_baglamla_calisir(istemci, monkeypatch, tmp_path):
     """Takip: aynı klasör + bağlam önsözü (dosyalar/geçmiş) + tip koruması."""
     monkeypatch.setenv("FCC_WORKSPACE", str(tmp_path))

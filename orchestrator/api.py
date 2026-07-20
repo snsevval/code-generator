@@ -194,13 +194,20 @@ def _gorev_kos(istek: GorevIstegi) -> None:
                 "reviewer": state.ciktilar.get("reviewer", ""),
                 "plan": state.ciktilar.get("planner", ""),
             }
-            # Başarılı fullstack/backend: backend'i önizleme için canlı bırak ki
-            # göz ikonu bağlı uygulamayı açsın
-            if DURUM.sonuc["dogrulama_gecti"] and playbook_adi in ("fullstack", "backend"):
+            # Önizleme: fullstack/backend'de backend'i canlı bırak ki göz ikonu açsın.
+            # ÖNEMLİ: doğrulama başarısız olsa BİLE dene — uygulama çalışıyorsa (backend
+            # ayağa kalkıp serve ediyorsa) kullanıcı görebilmeli. Sırf test dosyası bozuk
+            # diye çalışan uygulamanın önizlemesini kapatmak yanlıştı. _onizleme_backendini_
+            # baslat zaten yalnızca backend GERÇEKTEN başlarsa URL set eder (bozuksa None).
+            if playbook_adi in ("fullstack", "backend"):
                 _onizleme_backendini_baslat(ws)
                 if DURUM.onizleme_backend_url:
-                    log(f"[önizleme] backend canlı: {DURUM.onizleme_backend_url} — "
-                        "göz ikonuyla açınca liste/ekle/sil çalışır.")
+                    if DURUM.sonuc["dogrulama_gecti"]:
+                        log(f"[önizleme] backend canlı: {DURUM.onizleme_backend_url} — "
+                            "göz ikonuyla açınca liste/ekle/sil çalışır.")
+                    else:
+                        log(f"[önizleme] uygulama çalışıyor (testler geçmedi) — göz "
+                            f"ikonuyla görebilirsin: {DURUM.onizleme_backend_url}")
             # İstek geçmişi: takip önsözünde ve UI thread'inde kullanılır
             DURUM.sohbet.append(
                 {"istek": istek.gorev, "basarili": DURUM.sonuc["dogrulama_gecti"]}
