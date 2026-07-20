@@ -159,6 +159,10 @@ class Orkestrator:
         # durduran callable. Aşama başlarında ve tool turlarında kontrol edilir —
         # kullanıcı yanlış görevi iptal edip yeni projeye geçebilsin.
         self.iptal_kontrol: object | None = None
+        # Son deterministik doğrulamada uygulama gerçekten çalışıyor muydu? (backend
+        # serve + fullstack'te frontend bağlanıyor). Test bozuk olsa da True olabilir →
+        # api.py önizlemeyi buna göre açar (sadece çalışan uygulamalar önizlenir).
+        self._uygulama_calisiyor = False
         # git=True: otomatik kur (FCC_GIT=0 veya git yoksa sessizce kapalı),
         # git=False/None: kapalı, GitDeposu örneği: onu kullan
         if git is True:
@@ -488,6 +492,7 @@ class Orkestrator:
             rapor = runner.cpp_dogrula()
         else:
             rapor = runner.backend_dogrula()
+        self._uygulama_calisiyor = rapor.uygulama_calisiyor
         self._yaz(f"[runner] doğrulama: {'BAŞARILI' if rapor.gecti else 'BAŞARISIZ'}")
         return rapor.gecti, rapor.detay
 
@@ -567,6 +572,9 @@ class Orkestrator:
             gecti, dogrulama = self._dogrula(state, gorev, plan)
 
         state.ciktilar["dogrulama_gecti"] = str(gecti)
+        # Uygulama gerçekten çalışıyor mu (önizleme kararı bunu kullanır — testler
+        # geçmese bile çalışan uygulama önizlenir; kopuk uygulama önizlenmez)
+        state.ciktilar["uygulama_calisiyor"] = str(self._uygulama_calisiyor)
         # Reviewer yalnızca BAŞARILI koşuda koşar — başarısızda Runner'ın hata mesajı
         # zaten net; reviewer'ı çalıştırmak boşa token yakar (commit yine de yapılır).
         if gecti:

@@ -194,12 +194,12 @@ def _gorev_kos(istek: GorevIstegi) -> None:
                 "reviewer": state.ciktilar.get("reviewer", ""),
                 "plan": state.ciktilar.get("planner", ""),
             }
-            # Önizleme: fullstack/backend'de backend'i canlı bırak ki göz ikonu açsın.
-            # ÖNEMLİ: doğrulama başarısız olsa BİLE dene — uygulama çalışıyorsa (backend
-            # ayağa kalkıp serve ediyorsa) kullanıcı görebilmeli. Sırf test dosyası bozuk
-            # diye çalışan uygulamanın önizlemesini kapatmak yanlıştı. _onizleme_backendini_
-            # baslat zaten yalnızca backend GERÇEKTEN başlarsa URL set eder (bozuksa None).
-            if playbook_adi in ("fullstack", "backend"):
+            # Önizleme: uygulama GERÇEKTEN çalışıyorsa aç (backend serve + fullstack'te
+            # frontend backend'e bağlanıyor). Doğrulama testler yüzünden başarısız olsa
+            # BİLE, çalışan uygulama önizlenir; ama KOPUK uygulama (frontend bağlanamıyor)
+            # önizlenmez — "sayfa açılıyor" değil "gerçekten bağlanıyor" sinyali kullanılır.
+            uygulama_calisiyor = state.ciktilar.get("uygulama_calisiyor") == "True"
+            if playbook_adi in ("fullstack", "backend") and uygulama_calisiyor:
                 _onizleme_backendini_baslat(ws)
                 if DURUM.onizleme_backend_url:
                     if DURUM.sonuc["dogrulama_gecti"]:

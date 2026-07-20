@@ -391,7 +391,8 @@ def test_basarisiz_ama_calisan_uygulama_onizleme_baslar(istemci, monkeypatch):
                 "from fastapi import FastAPI\napp = FastAPI()\n", encoding="utf-8"
             )
             state = OturumState(gorev=gorev)
-            state.ciktilar = {"dogrulama_gecti": "False"}  # bozuk test → başarısız
+            # Testler başarısız ama uygulama çalışıyor (backend serve ediyor)
+            state.ciktilar = {"dogrulama_gecti": "False", "uygulama_calisiyor": "True"}
             return state
 
     monkeypatch.setattr(
@@ -403,6 +404,34 @@ def test_basarisiz_ama_calisan_uygulama_onizleme_baslar(istemci, monkeypatch):
     assert veri["sonuc"]["dogrulama_gecti"] is False  # görev başarısız
     assert veri["onizleme_backend_url"] is not None  # ama önizleme yine de açık
     assert any("uygulama çalışıyor" in s for s in veri["log"])
+
+
+def test_kopuk_uygulama_onizleme_acilmaz(istemci, monkeypatch):
+    # Uygulama KOPUK (frontend backend'e bağlanamıyor → uygulama_calisiyor False):
+    # başarısız + çalışmıyor → önizleme AÇILMAMALI (49707 senaryosu; kopuk önizleme yanlış)
+    from orchestrator import sunucu
+
+    monkeypatch.setattr(sunucu, "SunucuYoneticisi", _SahteSunucuYoneticisi)
+
+    class KopukOrk:
+        def __init__(self, ws, log):
+            self._ws = ws
+            self.iptal_kontrol = None
+
+        def gorev_calistir(self, gorev, devam=False):
+            (self._ws / "backend.py").write_text(
+                "from fastapi import FastAPI\napp = FastAPI()\n", encoding="utf-8"
+            )
+            state = OturumState(gorev=gorev)
+            state.ciktilar = {"dogrulama_gecti": "False", "uygulama_calisiyor": "False"}
+            return state
+
+    monkeypatch.setattr(api, "ORKESTRATOR_FABRIKASI", lambda ws, ex, log: KopukOrk(ws, log))
+    istemci.post("/api/gorev", json={"gorev": "FastAPI backend yaz"})
+    veri = _bekle_bitsin(istemci)
+
+    assert veri["sonuc"]["dogrulama_gecti"] is False
+    assert veri["onizleme_backend_url"] is None  # kopuk uygulama önizlenmez
 
 
 def test_takip_ayni_klasorde_baglamla_calisir(istemci, monkeypatch, tmp_path):

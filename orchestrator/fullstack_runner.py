@@ -111,6 +111,10 @@ class DogrulamaRaporu:
 
     gecti: bool
     detay: str
+    # Uygulama gerçekten çalışıyor mu? (backend serve ediyor + fullstack'te frontend
+    # backend'e bağlanıyor). gecti False olsa BİLE (ör. test dosyası bozuk) True olabilir
+    # → önizleme bu sinyale göre açılır; "sayfa açılıyor" değil "gerçekten bağlanıyor".
+    uygulama_calisiyor: bool = False
 
 
 def fastapi_uygulamasi_bul(workspace: Path) -> tuple[str, str] | None:
@@ -282,11 +286,16 @@ class FullstackRunner:
             )
         self._yaz(f"[runner] pytest (izole) çalışıyor: {', '.join(test_dosyalari)}")
         pytest_sonuc = self._pytest_kos()
-        if not pytest_sonuc.gecti:
-            return pytest_sonuc  # detay: pytest çıktısı
 
-        # 3) Sunucu ayağa kalkıp serve ediyor mu?
-        return self._sunucu_dogrula(modul, app_degiskeni)
+        # 3) Sunucu ayağa kalkıp serve ediyor mu? (pytest başarısız olsa BİLE koşulur —
+        #    uygulama çalışıyorsa önizleme açılabilsin; sadece test bozukluğu engellemesin)
+        sunucu_sonuc = self._sunucu_dogrula(modul, app_degiskeni)
+        gecti = pytest_sonuc.gecti and sunucu_sonuc.gecti
+        detay = sunucu_sonuc.detay if pytest_sonuc.gecti else (
+            pytest_sonuc.detay + "\n(Not: sunucu " +
+            ("ayakta." if sunucu_sonuc.gecti else "de sorunlu.") + ")"
+        )
+        return DogrulamaRaporu(gecti, detay, uygulama_calisiyor=sunucu_sonuc.uygulama_calisiyor)
 
     def _pytest_kos(self) -> DogrulamaRaporu:
         try:
@@ -344,8 +353,9 @@ class FullstackRunner:
             uc_sayisi = len(yanit.json().get("paths", {}))
             return DogrulamaRaporu(
                 True,
-                f"BAŞARILI: pytest geçti; {modul}:{app_degiskeni} uvicorn'da ayağa "
+                f"BAŞARILI: {modul}:{app_degiskeni} uvicorn'da ayağa "
                 f"kalktı ve {uc_sayisi} uç serve ediyor (/openapi.json 200).",
+                uygulama_calisiyor=True,
             )
         finally:
             yonetici.hepsini_durdur()
@@ -379,13 +389,28 @@ class FullstackRunner:
             return DogrulamaRaporu(
                 False, "BAŞARISIZ: frontend dosyası (index.html) bulunamadı."
             )
-        # Backend testleri varsa geçmeli (mantık doğruluğu)
+        # Backend testleri varsa geçmeli (mantık doğruluğu). Ama pytest başarısız olsa
+        # BİLE entegrasyon koşulur: uygulama gerçekten çalışıyorsa (frontend backend'e
+        # bağlanıyorsa) önizleme açılabilsin — sadece test bozukluğu bunu engellemesin.
+        pytest_gecti = True
+        pytest_detay = ""
         if list(self.workspace.glob("test_*.py")):
             self._yaz("[runner] pytest (izole) çalışıyor")
             pytest_sonuc = self._pytest_kos()
-            if not pytest_sonuc.gecti:
-                return pytest_sonuc
-        return self._entegrasyon_dogrula(modul, app_degiskeni, index)
+            pytest_gecti = pytest_sonuc.gecti
+            pytest_detay = pytest_sonuc.detay
+
+        ent = self._entegrasyon_dogrula(modul, app_degiskeni, index)
+        gecti = pytest_gecti and ent.gecti
+        if pytest_gecti:
+            detay = ent.detay
+        else:
+            # Testler geçmedi: uygulama çalışsa da görev BAŞARISIZ (mantık doğruluğu),
+            # ama uygulama_calisiyor entegrasyona göre → önizleme yine de açılabilir
+            baglanti = "frontend backend'e bağlanıyor" if ent.uygulama_calisiyor else \
+                "frontend backend'e de bağlanamıyor"
+            detay = pytest_detay + f"\n(Not: {baglanti}.)"
+        return DogrulamaRaporu(gecti, detay, uygulama_calisiyor=ent.uygulama_calisiyor)
 
     def _entegrasyon_dogrula(self, modul: str, app_degiskeni: str, index: Path) -> DogrulamaRaporu:
         """TEK-ORIGIN: backend'i boş bir portta başlatır (index.html'i de o servis eder),
@@ -498,4 +523,5 @@ class FullstackRunner:
             True,
             f"BAŞARILI: tek-origin — frontend backend'den veri çekti "
             f"({len(basarili)} başarılı fetch, konsol temiz).",
+            uygulama_calisiyor=True,
         )

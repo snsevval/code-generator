@@ -233,6 +233,19 @@ def test_fullstack_input_gerektiren_buton_gecer(tmp_path):
 
 
 @pytest.mark.skipif(not _TARAYICI, reason="playwright chromium yok")
+def test_fullstack_test_bozuk_ama_uygulama_calisiyor(tmp_path):
+    # Uygulama doğru (frontend bağlanıyor) ama test dosyası bozuk (syntax hatası):
+    # görev BAŞARISIZ (gecti False) AMA uygulama_calisiyor True → önizleme açılabilir
+    ws = _ws(tmp_path)
+    (ws / "backend.py").write_text(BACKEND_ITEMS, encoding="utf-8")
+    (ws / "index.html").write_text(FRONTEND_BAGLI, encoding="utf-8")
+    (ws / "test_backend.py").write_text("def test_x(:\n    bozuk sözdizimi\n", encoding="utf-8")
+    rapor = FullstackRunner(ws).fullstack_dogrula()
+    assert rapor.gecti is False  # test bozuk → görev başarısız
+    assert rapor.uygulama_calisiyor is True  # ama uygulama çalışıyor → önizlenebilir
+
+
+@pytest.mark.skipif(not _TARAYICI, reason="playwright chromium yok")
 def test_fullstack_kopuk_frontend_basarisiz(tmp_path):
     ws = _ws(tmp_path)
     (ws / "backend.py").write_text(BACKEND_ITEMS, encoding="utf-8")
