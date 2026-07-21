@@ -1,0 +1,332 @@
+/* Hero (landing) — referans hero-section birebir uyarlaması.
+   Renkler: siyah #000, gri #505050, açık gri #f8f8f8, yeşil rgba(90,225,76,0.89),
+   koyu badge #0e1311, beyaz, saydam örtü rgba(0,0,0,0.24). */
+
+.kabuk {
+  position: relative;
+  min-height: 100vh;
+  width: 100%;
+  overflow: hidden;
+  color: #000000;
+  background: #ffffff;
+  font-family: var(--font-schibsted), ui-sans-serif, system-ui, sans-serif;
+}
+
+/* --- Videolu arka plan: 115% boyut, üstten hizalı, yatay ortalı --- */
+.videoKatman {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+.video {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: 115%;
+  height: 115%;
+  transform: translateX(-50%);
+  object-fit: cover;
+  object-position: top center;
+  opacity: 0; /* JS rAF fade yönetir — CSS transition YOK */
+}
+
+/* --- Navigasyon --- */
+.nav {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 120px;
+}
+.logo {
+  font-family: var(--font-schibsted), sans-serif;
+  font-weight: 600;
+  font-size: 24px;
+  letter-spacing: -1.44px;
+  color: #000000;
+}
+.menu {
+  display: flex;
+  align-items: center;
+  gap: 34px;
+  list-style: none;
+}
+.menu li {
+  font-family: var(--font-schibsted), sans-serif;
+  font-weight: 500;
+  font-size: 16px;
+  letter-spacing: -0.2px;
+  color: #000000;
+  cursor: pointer;
+  opacity: 0.9;
+}
+.menu li:hover {
+  opacity: 1;
+}
+.menuChevron {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.navButonlar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.navSaydam {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 82px;
+  height: 40px;
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  font-family: var(--font-schibsted), sans-serif;
+  font-weight: 500;
+  font-size: 15px;
+  color: #000000;
+  cursor: pointer;
+}
+.navSaydam:hover {
+  background: #f8f8f8;
+}
+.navSiyah {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 101px;
+  height: 40px;
+  padding: 0 14px;
+  background: #000000;
+  color: #ffffff;
+  border: none;
+  border-radius: 8px;
+  font-family: var(--font-schibsted), sans-serif;
+  font-weight: 500;
+  font-size: 15px;
+  cursor: pointer;
+}
+.navSiyah:hover {
+  opacity: 0.9;
+}
+
+/* --- Hero içerik: 50px yukarı, ortalanmış --- */
+.icerik {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 0 120px;
+  margin-top: 44px; /* nav ile hero arası net boşluk (badge nav'a binmesin) */
+  gap: 34px;
+}
+
+/* Badge: koyu mini-pill (yıldız + Yeni) + açık zeminde metin */
+.rozet {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 6px 6px 8px;
+  background: #f8f8f8;
+  border-radius: 999px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  margin-bottom: -6px;
+}
+.rozetKoyu {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 9px;
+  background: #0e1311;
+  color: #ffffff;
+  border-radius: 999px;
+  font-family: var(--font-govde), sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+}
+.rozetMetin {
+  font-family: var(--font-govde), sans-serif;
+  font-weight: 400;
+  font-size: 14px;
+  color: #000000;
+  padding-right: 6px;
+}
+
+/* Ana başlık: Fustat Bold 80px, -4.8px */
+.baslik {
+  font-family: var(--font-fustat), sans-serif;
+  font-weight: 700;
+  font-size: 80px;
+  letter-spacing: -4.8px;
+  line-height: 1;
+  color: #000000;
+  text-wrap: balance;
+  max-width: 900px;
+}
+
+/* Alt başlık: Fustat Medium 20px, -0.4px, #505050 */
+.altBaslik {
+  font-family: var(--font-fustat), sans-serif;
+  font-weight: 500;
+  font-size: 20px;
+  letter-spacing: -0.4px;
+  line-height: 1.45;
+  color: #505050;
+  width: 542px;
+  max-width: 736px;
+}
+
+/* --- Görev kutusu (referans search box) --- */
+.kutu {
+  width: 728px;
+  max-width: 100%;
+  border-radius: 18px;
+  background: rgba(0, 0, 0, 0.24);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  padding: 14px;
+  margin-top: 10px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.18);
+}
+.kutuUst {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 8px 10px;
+}
+.kutuUstSol,
+.kutuUstSag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-schibsted), sans-serif;
+  font-weight: 500;
+  font-size: 12px;
+  color: #ffffff;
+}
+
+.girisAlani {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  background: #ffffff;
+  border-radius: 12px;
+  padding: 12px 12px 12px 16px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.1);
+}
+.giris {
+  flex: 1;
+  border: none;
+  outline: none;
+  resize: none;
+  max-height: 140px;
+  font-family: var(--font-govde), sans-serif;
+  font-size: 16px;
+  line-height: 1.5;
+  color: #000000;
+  background: transparent;
+}
+.giris::placeholder {
+  color: rgba(0, 0, 0, 0.6);
+}
+.gonderBtn {
+  flex: none;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: none;
+  background: #000000;
+  color: #ffffff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: transform 0.15s, opacity 0.15s;
+}
+.gonderBtn:hover:not(:disabled) {
+  transform: scale(1.06);
+}
+.gonderBtn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.kutuAlt {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 4px 2px;
+}
+.eylemler {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.eylem {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 10px;
+  border: none;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.14);
+  color: #ffffff;
+  font-family: var(--font-schibsted), sans-serif;
+  font-weight: 500;
+  font-size: 12px;
+  cursor: pointer;
+}
+.eylem:hover {
+  background: rgba(255, 255, 255, 0.22);
+}
+.eylemAktif {
+  background: rgba(90, 225, 76, 0.89);
+  color: #05230a;
+}
+.sayac {
+  font-family: var(--font-schibsted), sans-serif;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.75);
+}
+
+.durumNot {
+  font-family: var(--font-govde), sans-serif;
+  font-size: 14px;
+  color: #000000;
+}
+.hataNot {
+  font-family: var(--font-govde), sans-serif;
+  font-size: 14px;
+  color: #b00020;
+}
+
+/* --- Duyarlı --- */
+@media (max-width: 900px) {
+  .nav {
+    padding: 16px 24px;
+  }
+  .menu {
+    display: none;
+  }
+  .icerik {
+    padding: 0 24px;
+    transform: translateY(-20px);
+  }
+  .baslik {
+    font-size: 48px;
+    letter-spacing: -2.4px;
+  }
+  .altBaslik {
+    width: 100%;
+    font-size: 18px;
+  }
+  .kutu {
+    width: 100%;
+  }
+}

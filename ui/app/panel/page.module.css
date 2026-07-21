@@ -231,24 +231,19 @@
 
 /* --- Akış şeridi --- */
 
+/* Dar sağ rayda dikey liste (ikon + ad + durum satırları) */
 .akis {
   list-style: none;
-  display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  display: flex;
+  flex-direction: column;
   gap: var(--aralik-2);
-}
-
-@media (max-width: 700px) {
-  .akis {
-    grid-template-columns: 1fr;
-  }
 }
 
 .akisAdimi {
   display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: var(--aralik-1);
+  flex-direction: row;
+  align-items: center;
+  gap: var(--aralik-3);
   padding: var(--aralik-3);
   border-radius: 10px;
   border: 1px solid var(--kenar);
@@ -283,7 +278,8 @@
 }
 
 .akisAd {
-  font-size: 0.8rem;
+  flex: 1;
+  font-size: 0.85rem;
   font-weight: 600;
 }
 
@@ -362,11 +358,37 @@
   padding: var(--aralik-3);
   max-height: 380px;
   overflow-y: auto;
+  overscroll-behavior: contain;
   font-family: var(--font-kod), ui-monospace, monospace;
   font-size: 0.76rem;
   line-height: 1.65;
   white-space: pre-wrap;
   word-break: break-word;
+  /* Firefox: ince zeytin tonlu scrollbar */
+  scrollbar-width: thin;
+  scrollbar-color: rgba(21, 128, 61, 0.45) transparent;
+}
+
+/* WebKit (Chrome/Edge/Safari): profesyonel ince scrollbar */
+.log::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.log::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.log::-webkit-scrollbar-thumb {
+  background: rgba(21, 128, 61, 0.35);
+  border-radius: 999px;
+  border: 3px solid transparent;
+  background-clip: padding-box;
+}
+
+.log::-webkit-scrollbar-thumb:hover {
+  background: rgba(21, 128, 61, 0.6);
+  background-clip: padding-box;
 }
 
 .planner {
@@ -771,4 +793,120 @@
   padding: 2px 6px;
   border-radius: 4px;
   font-size: 0.85em;
+}
+
+/* Boş durum (görev yokken /panel) — ana sayfaya (hero) yönlendir */
+.bosDurumMetin {
+  margin: 0;
+  font-size: 0.9rem;
+  line-height: 1.55;
+  color: #505050;
+}
+
+.anaSayfaLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: var(--aralik-4);
+  padding: 11px 18px;
+  border-radius: 10px;
+  background: #15803d;
+  color: #ffffff;
+  font-family: var(--font-schibsted), sans-serif;
+  font-weight: 600;
+  font-size: 0.9rem;
+  width: fit-content;
+  transition: background 160ms ease, box-shadow 160ms ease, transform 120ms ease;
+}
+
+.anaSayfaLink:hover {
+  background: #1ba34d;
+  box-shadow: 0 4px 14px rgba(21, 128, 61, 0.28);
+}
+
+.anaSayfaLink:active {
+  transform: translateY(1px);
+}
+
+/* Takip bloğu — hero görev kutusu dili (frosted/blur + beyaz input + yeşil buton) */
+.takipGecmis {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin: 2px 0;
+}
+
+.takipGecmisSatir {
+  display: flex;
+  gap: 7px;
+  align-items: center;
+  font-size: 11.5px;
+  line-height: 1.4;
+  color: #6b6b6b;
+  padding: 2px 2px;
+}
+
+.takipNokta {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+
+.takipNoktaIyi {
+  background: #15803d;
+}
+
+.takipNoktaKotu {
+  background: #d09a12;
+}
+
+.takipKutu {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  padding: 8px;
+  border-radius: 16px;
+  background: rgba(21, 128, 61, 0.06);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid rgba(21, 128, 61, 0.22);
+  box-shadow: 0 10px 30px rgba(21, 128, 61, 0.06);
+}
+
+.takipKutu .takipInput {
+  flex: 1;
+  min-width: 0;
+  min-height: 44px;
+  border: none !important;
+  background: #ffffff !important;
+  border-radius: 12px !important;
+  outline: none;
+  padding: 12px 14px !important;
+  font-size: 15px;
+  font-family: var(--font-govde), sans-serif;
+  color: #000000 !important;
+  box-shadow: inset 0 0 0 1px rgba(21, 128, 61, 0.12);
+}
+
+.takipKutu .takipInput:focus {
+  box-shadow: inset 0 0 0 1.5px #15803d;
+}
+
+.takipUygula {
+  border-radius: 12px !important;
+  padding: 0 20px !important;
+  min-height: 44px;
+  white-space: nowrap;
+  font-family: var(--font-schibsted), sans-serif !important;
+  letter-spacing: -0.2px;
+}
+
+.takipNot {
+  margin: 10px 2px 0;
+  font-size: 12px;
+  color: #505050;
+  line-height: 1.5;
 }
