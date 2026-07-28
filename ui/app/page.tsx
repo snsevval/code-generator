@@ -36,17 +36,6 @@ const IkonSparkle = () => (
     <path d="M12 2l1.8 5.4L19 9.2l-5.2 1.8L12 16l-1.8-5L5 9.2l5.2-1.8zM19 14l.9 2.6L22 17.5l-2.1.9L19 21l-.9-2.6L16 17.5l2.1-.9z" />
   </svg>
 );
-const IkonAtac = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden>
-    <path d="M21 8.5 11.5 18a4 4 0 0 1-5.7-5.7l8.5-8.5a2.7 2.7 0 0 1 3.8 3.8l-8.5 8.5a1.3 1.3 0 0 1-1.9-1.9l7.8-7.8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-  </svg>
-);
-const IkonMikrofon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden>
-    <rect x="9" y="3" width="6" height="11" rx="3" stroke="currentColor" strokeWidth="1.6" />
-    <path d="M5 11a7 7 0 0 0 14 0M12 18v3" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-  </svg>
-);
 const IkonArama = () => (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden>
     <circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="1.6" />
@@ -257,19 +246,19 @@ export default function Hero() {
                 className={`${styles.eylem} ${tasarim ? styles.eylemAktif : ""}`}
                 onClick={() => setTasarim((v) => !v)}
               >
-                <IkonSparkle /> Tasarım
+                Tasarım
               </button>
               <button
                 className={`${styles.eylem} ${proje ? styles.eylemAktif : ""}`}
                 onClick={() => setProje((v) => !v)}
               >
-                <IkonAtac /> Proje
+                Proje
               </button>
               <button
                 className={`${styles.eylem} ${docker ? styles.eylemAktif : ""}`}
                 onClick={() => setDocker((v) => !v)}
               >
-                <IkonMikrofon /> Docker
+                Docker
               </button>
             </div>
             <span className={styles.sayac}>
