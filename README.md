@@ -105,6 +105,21 @@ $env:FCC_TEST_MODEL = 'nvidia_nim/deepseek-ai/deepseek-v4-flash'
 uv run python tests/test_tool_use_consistency.py
 ```
 
+### DeepSeek V4 Flash (DS4) — yerel, deneysel ikinci sağlayıcı
+
+Arayüzdeki model seçicisinden **DeepSeek V4 · deneysel** seçilirse LLM ajanları
+(Planner/Codegen/Debugger/Reviewer) WSL'de çalışan yerel `ds4-server`'a gider;
+Runner/test/sunucu yönetimi değişmez, Nemotron varsayılan kalır. ds4-server
+Anthropic `/v1/messages`'ı natif konuştuğu için format çevirisi gerekmez.
+
+- **ds4-server bir kez başlatılır** (sistem başlatmaz):
+  `./ds4-server --host 0.0.0.0 --port 8000 -m <model.gguf> --ssd-streaming`
+- İstemci URL'si `FCC_DS4_URL` ile ayarlanır (varsayılan `http://localhost:8000`);
+  başka makinede koşuyorsa o makinenin adresini verin.
+- DS4 kapalıyken seçilirse görev **sessizce Nemotron'a dönmez** — açık hata verir.
+- DS4 çok yavaş olabilir (VRAM'e sığmayan büyük modelde SSD streaming; ~0.1 tok/s
+  ölçüldü), okuma zaman aşımı yoktur. Yalnız küçük görevlerde kullanın.
+
 ## Testler
 
 ```powershell
