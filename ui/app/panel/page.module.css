@@ -513,6 +513,36 @@
 }
 .takipNot { font-size: 12px; color: var(--metin2); }
 
+/* Model seçici: segment kontrolü (Nemotron · DeepSeek V4) */
+.modelSecici {
+  display: inline-flex;
+  padding: 3px;
+  border-radius: 999px;
+  border: 1px solid var(--kenar2);
+  background: var(--yuzey);
+  gap: 2px;
+}
+.modelBtn {
+  padding: 4px 12px;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--metin2);
+  font-family: var(--font-schibsted), sans-serif;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 140ms ease;
+  white-space: nowrap;
+}
+.modelBtn:hover { color: var(--metin); }
+.modelAktif {
+  background: var(--y-tint);
+  color: var(--y);
+  box-shadow: 0 1px 2px var(--golge);
+}
+.deneyselNot { font-size: 12px; color: var(--y); }
+
 /* --- Değişiklikler modalı --- */
 .modalSar {
   position: fixed;

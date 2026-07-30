@@ -17,6 +17,7 @@ import subprocess
 import sys
 import threading
 from pathlib import Path
+from typing import Literal
 
 import mimetypes
 
@@ -27,6 +28,7 @@ from fastapi.responses import FileResponse, PlainTextResponse, RedirectResponse
 from pydantic import BaseModel
 
 from orchestrator.calisma_alani import gorev_klasoru_sec
+from orchestrator.ds4_client import DS4Istemcisi, VARSAYILAN_DS4_URL
 from orchestrator.fullstack_runner import fastapi_uygulamasi_bul
 from orchestrator.llm_client import VARSAYILAN_PROXY_URL
 from orchestrator.loop import IptalEdildi, Orkestrator
@@ -51,6 +53,9 @@ app.add_middleware(
 class GorevIstegi(BaseModel):
     gorev: str
     model: str | None = None  # örn. "groq/llama-3.3-70b-versatile"; boşsa varsayılan
+    # Hangi sağlayıcı: "nemotron" (proxy, varsayılan) veya "ds4" (yerel, deneysel).
+    # DS4 seçilirse LLM ajanları ds4-server'a gider; Runner/test/sunucu DEĞİŞMEZ.
+    model_provider: Literal["nemotron", "ds4"] = "nemotron"
     docker: bool = False
     devam: bool = False
     proje: bool = False  # True: hedef alt görevlere bölünüp zincir halinde koşulur
@@ -130,7 +135,25 @@ def _gorev_kos(istek: GorevIstegi) -> None:
         DURUM.klasor_yolu = ws
         runner = DockerShellRunner(ws) if istek.docker else None
         log = lambda satir: DURUM.log.append(satir)  # noqa: E731
-        ork = ORKESTRATOR_FABRIKASI(ws, ToolExecutor(ws, shell_runner=runner), log)
+        executor = ToolExecutor(ws, shell_runner=runner)
+        if istek.model_provider == "ds4":
+            # Ön kontrol: ds4-server ayakta mı? Sessiz Nemotron'a DÖNÜŞ YOK — kapalıysa
+            # açık hata ver ve görevi koşma (kullanıcı DS4 performansını ölçmek istiyor).
+            ds4_url = os.environ.get("FCC_DS4_URL", VARSAYILAN_DS4_URL)
+            try:
+                httpx.get(f"{ds4_url.rstrip('/')}/v1/models", timeout=5.0)
+            except httpx.TransportError:
+                DURUM.hata = (
+                    f"DS4 sunucusu kapalı ({ds4_url}). WSL'de ds4-server'ı başlatın: "
+                    "./ds4-server --host 0.0.0.0 --port 8000 --model gguf/ds4flash.gguf"
+                )
+                log("[model] DS4 seçildi ama ds4-server kapalı — görev koşulmadı.")
+                return
+            log("[model] DS4 — yerel DeepSeek V4 Flash (deneysel · yavaş ~0.5 tok/s).")
+            ork = ORKESTRATOR_FABRIKASI(ws, executor, log, istemci=DS4Istemcisi())
+        else:
+            log("[model] Nemotron (proxy).")
+            ork = ORKESTRATOR_FABRIKASI(ws, executor, log)
         # İşbirlikçi durdurma: gerçek orkestratörde iptal_kontrol var; bazı test
         # sahteleri attribute kabul etmez → savunmacı ata (o zaman iptal edilemez)
         try:
@@ -264,8 +287,10 @@ def _onay_bekle(alt: dict) -> bool:
     return DURUM.onay_karari if geldi else False
 
 
-def _varsayilan_fabrika(ws: Path, executor: ToolExecutor, log) -> Orkestrator:
-    return Orkestrator(ws, executor=executor, log=log)
+def _varsayilan_fabrika(ws: Path, executor: ToolExecutor, log, istemci=None) -> Orkestrator:
+    # istemci=None → Orkestrator kendi varsayılan LLMIstemcisi'ni (Nemotron/proxy) kurar;
+    # DS4 seçilince buraya DS4Istemcisi enjekte edilir
+    return Orkestrator(ws, istemci=istemci, executor=executor, log=log)
 
 
 # Testlerin sahte orkestratör/zenginleştirici enjekte edebilmesi için modül düzeyinde

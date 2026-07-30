@@ -42,7 +42,7 @@ class LLMIstemcisi:
         self,
         taban_url: str | None = None,
         auth_token: str | None = None,
-        zaman_asimi: float = 300.0,
+        zaman_asimi: float | httpx.Timeout | None = 300.0,
     ):
         taban = (taban_url or os.environ.get("FCC_PROXY_URL", VARSAYILAN_PROXY_URL)).rstrip("/")
         self._url = f"{taban}/v1/messages"
@@ -50,6 +50,11 @@ class LLMIstemcisi:
         self._istemci = httpx.Client(timeout=zaman_asimi)
         # Token sayacı: kota takibi için oturum boyunca birikir
         self.kullanim = {"istek": 0, "girdi": 0, "cikti": 0}
+        # Alt sınıfların (örn. DS4) her isteğe eklediği gövde alanları (thinking vb.);
+        # boşsa hiçbir davranış değişmez
+        self.ek_govde: dict = {}
+        # Bağlantı hatasında gösterilecek ipucu (DS4 bunu ds4-server'a göre değiştirir)
+        self._baglanti_ipucu = "proxy çalışmıyor olabilir, fcc-server'ı başlatın."
 
     def mesaj_gonder(
         self,
@@ -75,6 +80,8 @@ class LLMIstemcisi:
             govde["system"] = system
         if tools:
             govde["tools"] = tools
+        if self.ek_govde:
+            govde.update(self.ek_govde)
 
         son_hata = ""
         for deneme in range(1, YENIDEN_DENEME_SAYISI + 1):
@@ -89,8 +96,7 @@ class LLMIstemcisi:
                 )
             except httpx.ConnectError as e:
                 raise ProxyHatasi(
-                    f"{self._url} adresine bağlanılamadı — proxy çalışmıyor olabilir, "
-                    "fcc-server'ı başlatın."
+                    f"{self._url} adresine bağlanılamadı — {self._baglanti_ipucu}"
                 ) from e
 
             if yanit.status_code in (429, 500, 502, 503, 529):

@@ -150,6 +150,13 @@ function adimKartlari(durum: Durum | null): Adim[] {
       not: durum?.hata ?? undefined,
     });
   }
+  // Görev hata/başarısızla durduysa spinner'da kalan kartları başarısız göster
+  // (yoksa "Plan hazırlanıyor" kartı iş çoktan bittiği halde sonsuza dek dönerdi)
+  if (!calisiyor && final === "basarisiz") {
+    for (const a of adimlar) {
+      if (a.durum === "calisiyor") a.durum = "basarisiz";
+    }
+  }
   return adimlar;
 }
 
@@ -259,6 +266,8 @@ export default function Sohbet() {
   const [tasarim, setTasarim] = useState(false);
   const [proje, setProje] = useState(false);
   const [docker, setDocker] = useState(false);
+  // Model sağlayıcı: Nemotron (varsayılan) veya DS4 (yerel, deneysel)
+  const [modelSaglayici, setModelSaglayici] = useState<"nemotron" | "ds4">("nemotron");
   const [gonderimHatasi, setGonderimHatasi] = useState<string | null>(null);
   const [dosyalarAcik, setDosyalarAcik] = useState(false);
   const [onizlemeYukleniyor, setOnizlemeYukleniyor] = useState(false);
@@ -342,8 +351,8 @@ export default function Sohbet() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(
         takip
-          ? { gorev: metin, takip: true }
-          : { gorev: metin, tasarim, proje, docker, takip: false },
+          ? { gorev: metin, takip: true, model_provider: modelSaglayici }
+          : { gorev: metin, tasarim, proje, docker, takip: false, model_provider: modelSaglayici },
       ),
     });
     if (!y.ok) {
@@ -470,19 +479,22 @@ export default function Sohbet() {
       ? gecmis.slice(0, -1)
       : gecmis;
 
+  // "Yeni sohbet"te backend'de duran eski hata/sonuç gösterilmez — nötr "Hazır"
   const durumEtiketi = !durum
     ? "API kapalı"
-    : durum.onay_bekleyen
-      ? "Onay bekliyor"
-      : durum.calisiyor
-        ? "Çalışıyor"
-        : durum.hata
-          ? "Hata"
-          : durum.sonuc
-            ? durum.sonuc.dogrulama_gecti
-              ? "Hazır"
-              : "Doğrulama kaldı"
-            : "Hazır";
+    : yeniProje && !durum.calisiyor
+      ? "Hazır"
+      : durum.onay_bekleyen
+        ? "Onay bekliyor"
+        : durum.calisiyor
+          ? "Çalışıyor"
+          : durum.hata
+            ? "Hata"
+            : durum.sonuc
+              ? durum.sonuc.dogrulama_gecti
+                ? "Hazır"
+                : "Doğrulama kaldı"
+              : "Hazır";
 
   const k = durum?.kullanim;
   const bosDurum = !konusmaVar && gecmisGoster.length === 0;
@@ -507,7 +519,7 @@ export default function Sohbet() {
           >
             {tema === "karanlik" ? <IkonGunes /> : <IkonAy />}
           </button>
-          <span className={`${styles.durumRozet} ${durum?.calisiyor ? styles.rozetAktif : durum?.hata ? styles.rozetKotu : styles.rozetIyi}`}>
+          <span className={`${styles.durumRozet} ${durum?.calisiyor ? styles.rozetAktif : !yeniProje && durum?.hata ? styles.rozetKotu : styles.rozetIyi}`}>
             {durum?.calisiyor && <Spinner boyut={12} />} {durumEtiketi}
           </span>
           <span className={`${styles.saglik} ${saglik?.api ? styles.sIyi : styles.sKotu}`}>API</span>
@@ -686,6 +698,26 @@ export default function Sohbet() {
               )}
             </form>
             <div className={styles.secenekler}>
+              {/* Model seçici: Nemotron (varsayılan) · DS4 (yerel, deneysel) — takipte de görünür */}
+              <div className={styles.modelSecici} role="group" aria-label="Model seçimi">
+                <button
+                  type="button"
+                  className={`${styles.modelBtn} ${modelSaglayici === "nemotron" ? styles.modelAktif : ""}`}
+                  onClick={() => setModelSaglayici("nemotron")}
+                >
+                  Nemotron
+                </button>
+                <button
+                  type="button"
+                  className={`${styles.modelBtn} ${modelSaglayici === "ds4" ? styles.modelAktif : ""}`}
+                  onClick={() => setModelSaglayici("ds4")}
+                >
+                  DeepSeek V4 · deneysel
+                </button>
+              </div>
+              {modelSaglayici === "ds4" && (
+                <span className={styles.deneyselNot}>Yerel model — yavaş (~0.5 tok/s); ds4-server açık olmalı.</span>
+              )}
               {takipModu ? (
                 <span className={styles.takipNot}>Mevcut projeye ekleme yapılıyor · yeni proje için “Yeni sohbet”</span>
               ) : (
